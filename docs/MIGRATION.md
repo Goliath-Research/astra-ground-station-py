@@ -19,6 +19,9 @@ Decisions already made (2026-10-03):
 - LabVIEW will move off NI shared variables onto OPC UA tags published by the bridge.
 - Production Delphi was built for Win64. Numeric golden values follow that build (SSE2 `float64`, not 80-bit Win32 `Extended`).
 - There are no saved `.DAT` files, packet captures, or `AstraTestLog` dumps. §6 says how to get confidence without them.
+- The bridge UDP port is configuration (`ASTRA_BRIDGE_PORT`, or the same key in `/etc/astra/astra.env`). The legacy literal 2357 is only the default.
+- Stage count is configuration (`ASTRA_STAGE_COUNT`, default 2). The rocket started with two stages.
+- `Jobs.PacketID`, with `TestID`, is the job key. `IntfID` is a generated UUID.
 
 ## What the running system actually does
 
@@ -142,8 +145,8 @@ Do not port a `.dfm`. `AstraConfigurator/Main.dfm` and `AstraConfigurationManage
 | `AstraCommon` data module | `astra.db`. One connection helper reading the same INI keys, then environment variables once the services move off `sa`. Replace the 30 stored-procedure calls with SQL functions. Do not generate an EntityDAC-style class per table |
 | `AstraCommon` OPC units (`AstraInpPopper`, `AstraOutPusher`, `AstraOpcClient*`, `AstraOpcThread`) | `astra.opcua`, an `asyncua` **server** inside the bridge process. David has confirmed LabVIEW will drop NI shared variables and subscribe to these tags. Tag path `Astra{PacketName}/{field}`. `asyncua` is pure Python, so this is the same code on x86_64 and ARM64 |
 | `TaskManager` root units | Not a port. `asyncio.Queue` and `asyncio` tasks. The 100 ms `TTimerTask` loops become `asyncio.sleep(0.1)` polls, or `LISTEN/NOTIFY` later if the polling is annoying |
-| `AstraBridgeServer` and `AstraBridgeServerDesktop` | `python -m astra.bridge`, one process, systemd unit. Desktop and service targets collapse. Poll `tests` for `active`, bind the UDP port from `servers.port`, run the same accept/reject rules, write DAT files, update OPC UA nodes |
-| `AstraTMoIP` and `AstraTMoIPDesktop` | `python -m astra.tmoip`. Same reassembly as `TAstraStageDecoder`. Forward reassembled datagrams to the bridge address, which must become configuration (today it is the literal `127.0.0.1:2357`) |
+| `AstraBridgeServer` and `AstraBridgeServerDesktop` | `python -m astra.bridge`, one process, systemd unit. Desktop and service targets collapse. Poll `tests` for `active`, bind `ASTRA_BRIDGE_PORT` (default 2357, the Delphi literal; not a fixed field value), run the same accept/reject rules, write DAT files, update OPC UA nodes |
+| `AstraTMoIP` and `AstraTMoIPDesktop` | `python -m astra.tmoip`. Same reassembly as `TAstraStageDecoder`. Listen on `ASTRA_BRIDGE_PORT + stage` for stages `1 .. ASTRA_STAGE_COUNT` (default 2) and forward reassembled datagrams to that same bridge port. The Delphi code hard-coded `127.0.0.1:2357` and always constructed stages 1 and 2 |
 | `AstraTMEncoder` | `python -m astra.cli.tm_encoder`. Headless loop first, so it can generate fixtures. A page in the web app can wrap it later. DevExpress grid goes away |
 | `AstraLogExporter` and desktop | `python -m astra.exporter`, systemd. Same job poll, `CREATE TABLE` from the field list, bulk insert with `psycopg` |
 | `AstraConfigurator` | Web app: the version tree, field editor, pin mapping, device/server/test screens, and the three exports that matter (Simulink CSV from `spGetInterface`, mapping CSV from `spGetMappingWithOrders`, tag CSV). Skip the DevExpress HTML/XML/XLS buttons unless a consumer is named. PDF of the wiring list is the browser print dialog |
@@ -187,7 +190,7 @@ When the bridge stops a test it calls `spTestExport`. The exporter then creates 
 
 ## 3. What is performance-sensitive, and where Mojo fits
 
-The rates written down in `AstraTMEncoder` are a 200 Hz minor-frame clock and R2L packets at 100, 10, or 1 Hz. Payloads are one interface: a few dozen fields, hundreds of bytes, not a software radio. Two stages are hardcoded. The bridge’s OPC group update rate for L2R is 1000 ms. The test and job polls are 100 ms.
+The rates written down in `AstraTMEncoder` are a 200 Hz minor-frame clock and R2L packets at 100, 10, or 1 Hz. Payloads are one interface: a few dozen fields, hundreds of bytes, not a software radio. The Delphi decoder hardcodes two stages; the port reads `ASTRA_STAGE_COUNT` (default 2). The bridge’s OPC group update rate for L2R is 1000 ms. The test and job polls are 100 ms.
 
 That is not a throughput problem for Python. It is a correctness problem (bit packing, reassembly, transforms).
 
@@ -240,7 +243,7 @@ Several of those are the product. `spDuplicate`, `spDelete`, `spMoveNodeToSeq`, 
 
 `AstraTestLog` (`testlog`) holds one table per exported interface, named `{PacketName}_{TestID}`, created at runtime by `ExportAsSqlCreateScript`. The backup contains 16 of those wide tables (`L2R_*` and `R2L_*`). `qryIntfData` is hard-wired to `AstraTestLog.dbo.L2R_1`.
 
-`Jobs` has both columns. The primary key is `(TestID, PacketID)`, and `IntfID` is a nullable integer. `JobMonitor` filters `PacketID`. `TestsManager` filters `IntfID`. Both queries name real columns.
+`Jobs` has both columns. The primary key is `(TestID, PacketID)`. The migrated `IntfID` column is a nullable integer. `JobMonitor` filters `PacketID`. `TestsManager` filters `IntfID`. Both queries name real columns. **Resolved:** `PacketID` is the real key. `IntfID` is a generated UUID, not the key the exporter selects on. The loaded `config.jobs.intfid` column stays `integer` until a later migration widens it.
 
 ### Type and dialect mapping that is visible now
 
@@ -295,7 +298,7 @@ Tree icons that the queries depend on: `IconID` 5 is a smart node (`tblDevices` 
 | CodeSite (`USE_CODESITE`) | optional traces | stdlib `logging` |
 | Clear-text SQL passwords, `sa`, `CHANGE_ME` | INI and `Servers.Password` | a dedicated PostgreSQL role, password in the environment or a root-only file, not in the database and not in git |
 
-LabVIEW remains a separate application and will be an OPC UA client of the bridge. The ground-station processes run on Linux. UDP ports in use today: the bridge port from `Servers.Port` (the decoder assumes 2357), and `2357 + stage` for telemetry.
+LabVIEW remains a separate application and will be an OPC UA client of the bridge. The ground-station processes run on Linux. The bridge UDP port is `ASTRA_BRIDGE_PORT` (default 2357, the legacy literal). TMoIP listens on that port plus the stage number. Stage count is `ASTRA_STAGE_COUNT` (default 2).
 
 ### Linux on x86_64 and ARM64
 
@@ -423,11 +426,11 @@ Risks that are visible from this tree:
 - **Behavior lives in the stored procedures.** Sizing, tree duplicate/delete, and “test stopped → jobs” are in `database/mssql/03_programmability.sql` and `database/postgres/03_programmability.sql`. A Python rewrite of those rules from guesswork will drift.
 - **The LabVIEW edit is outside this repo.** The destination is settled: OPC UA tags published by the bridge, not NI shared variables. Someone still has to retarget the VIs. Who that is, and whether the old shared-variable CSV is needed for one release, is question 12.
 - **`TransformInput` is dead code.** Commands toward the vehicle are not converted back from engineering units. If LabVIEW operators type engineering units into L2R tags, the rocket receives those numbers packed as raw integers. Preserve it, and confirm it is what the vehicle expects.
-- **Decoder and bridge disagree on the port unless `Servers.Port` is 2357.** The decoder sends to a literal `127.0.0.1:2357`. The bridge listens on the database port.
-- **Only stages 1 and 2 exist.** `TAstraDecoder.Create` constructs `TAstraStageDecoder.Create(1)` and `Create(2)`. Packet ids for the logged minor frames are `100 * (stage - 1) + 106`.
+- **Decoder and bridge share one configured port.** Delphi sent to a literal `127.0.0.1:2357` while the bridge listened on `Servers.Port`. The port reads `ASTRA_BRIDGE_PORT` for both, default 2357.
+- **Stage count is configuration.** `TAstraDecoder.Create` constructs `TAstraStageDecoder.Create(1)` and `Create(2)`. The rocket started with two stages, so `ASTRA_STAGE_COUNT` defaults to 2. Packet ids for the logged minor frames are `100 * (stage - 1) + 106`.
 - **Two decoder counters do not do what the comments say.** `FDroppedMinorFrames` is never incremented. `FAvgFramesByRow` is `ReceivedMajorFrames / ReceivedMinorFrames`, which is the reciprocal of “minor frames per major frame”. Stats packets will carry those values. Match them or fix them on purpose.
 - **A skipped subframe is dropped by doing nothing**, not by the path the comment describes. After a gap, later subframes of that major frame are ignored because `sf_id` must equal `last + 1`.
-- **Job identity is inconsistent in the Pascal.** `PacketID` versus `IntfID` on `Jobs`.
+- **Job identity is `(TestID, PacketID)`.** `IntfID` is a generated UUID. The Pascal also filtered `Jobs` on `IntfID`; the exporter does not.
 - **`u12`, nested records, and `ovr_` bits are easy to drop.** There is no flight capture to notice. The Win64 oracle harness and the unaligned property tests in §6 are what catch it.
 - **Transformation 1 is a Win64 `float64` formula.** Production was x64, so Python’s IEEE-754 binary64 is the right width on both Linux architectures. The remaining risk is `System.Math.Power` versus `math.pow`, which the harness hex comparison measures. Do not generate those goldens from a Win32 build.
 - **DAT timestamps are local OLE dates.** A Linux host in UTC will not match a Windows host in US Pacific unless the converter treats the stored value as naive local time.
@@ -442,13 +445,13 @@ Open questions for David:
 1. **Resolved.** Both `AstraConfig` and `AstraTestLog` were in the backups. Schema and programmability scripts are in `database/`. The `02_data.sql` scripts and the `.bak` files stay outside git.
 2. Is the EntityDAC model in `DataModel.Mapping.xml` (boards / stacks / stars / proc blocks) what any vehicle was built from, or was the live tool always `AstraConfigurator` plus `TreeVersions`?
 3. **Resolved.** LabVIEW will move from NI shared variables to OPC UA tags published by the bridge.
-4. What did the deployed `Servers.Port` and OPC server name actually contain? Is 2357 the bridge port in the field?
-5. Are more than two stages required, or is the stage-1/stage-2 split in `TAstraDecoder` the real vehicle?
+4. **Resolved for the UDP port.** The bridge port is configuration (`ASTRA_BRIDGE_PORT`, environment variable or `/etc/astra/astra.env`), not a fixed field value. The legacy literal 2357 is only the default. The deployed OPC DA server name is still open; the published endpoint is `ASTRA_OPCUA_ENDPOINT`.
+5. **Resolved.** The rocket started with two stages. Stage count is `ASTRA_STAGE_COUNT`, default 2, not the two constructors in `TAstraDecoder.Create`.
 6. Is the unused `TransformInput` a bug that the rocket side already compensates for?
 7. Is there a serial-over-UDP or UART gateway that lived outside this repo? Nothing here implements one. The ground link is the R2L/L2R datagram plus the TMoIP minor-frame port.
 8. **Resolved.** There are no captured `.DAT` files, pcaps, or exported test tables. Regression uses the Win64 oracle harness, property tests, the simulated vehicle, and captures taken from now on (§6).
 9. Should `FDroppedMinorFrames` and `FAvgFramesByRow` be corrected, or must old stats packets stay comparable?
-10. Which `Jobs` column is real, `PacketID` or `IntfID`?
+10. **Resolved.** `Jobs.PacketID` is the real key, together with `TestID`. `IntfID` is a generated UUID.
 11. **Resolved.** Production was built for x64 (Win64). Golden numeric values, including transformation 1, follow Win64 `float64` behavior.
 12. Who owns the LabVIEW change that retargets the VIs to the bridge’s OPC UA tags, and does the client still need the NI shared-variable CSV during the cutover? The destination itself is settled (question 3).
 13. Should the v3 hardware editor (`AstraConfigurationManager`) be dropped?

@@ -1,12 +1,14 @@
 import pytest
 
-from astra.tmoip import reassemble, stage_port
+from astra.tmoip import reassemble, stage_count, stage_port, stage_ports
 from astra.tmoip.__main__ import main
 
 
-def test_stage_ports_follow_the_delphi_decoder() -> None:
-    assert stage_port(1) == 2358
-    assert stage_port(2) == 2359
+def test_default_stage_ports_follow_the_delphi_decoder() -> None:
+    assert stage_count({}) == 2
+    assert stage_port(1, {}) == 2358
+    assert stage_port(2, {}) == 2359
+    assert stage_ports({}) == (2358, 2359)
     assert main(["--check"]) == 0
 
 

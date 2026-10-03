@@ -1,16 +1,20 @@
 """Telemetry-over-IP minor-frame reassembly.
 
-``AstraTMoIP`` listens on UDP ``2357 + stage`` (stage 1 is 2358, stage 2 is
-2359) and forwards reassembled datagrams to the bridge. The bridge address
-is configuration; the Delphi code hard-codes ``127.0.0.1:2357``.
+Listens on ``ASTRA_BRIDGE_PORT + stage`` for stages ``1 .. ASTRA_STAGE_COUNT``
+(defaults: port 2357 and two stages, so 2358 and 2359) and forwards
+reassembled datagrams to the bridge on ``ASTRA_BRIDGE_PORT``. The Delphi
+decoder hard-coded ``127.0.0.1:2357`` and always constructed stages 1 and 2.
 """
 
-BRIDGE_PORT_ASSUMED = 2357
+from astra.settings import bridge_port, stage_count, stage_port, stage_ports
 
-
-def stage_port(stage: int) -> int:
-    """Return the UDP port for one stage decoder."""
-    return BRIDGE_PORT_ASSUMED + stage
+__all__ = [
+    "bridge_port",
+    "reassemble",
+    "stage_count",
+    "stage_port",
+    "stage_ports",
+]
 
 
 def reassemble(datagram: bytes) -> bytes:
