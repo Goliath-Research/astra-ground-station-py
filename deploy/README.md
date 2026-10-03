@@ -15,6 +15,8 @@ were VCL programs rather than services.
 `astra.codec`, `astra.binlog`, `astra.db`, and `astra.opcua` are libraries.
 `astra.cli` is three commands (`generate`, `device`, `tm_encoder`), not units.
 The bridge does not bind its UDP port or the OPC UA endpoint yet.
+`ASTRA_BRIDGE_PORT` (default 2357) and `ASTRA_STAGE_COUNT` (default 2) are
+read from the environment file when those processes are ported.
 
 ## Host layout
 

@@ -36,6 +36,7 @@ src/astra/
   codec/                   bit packer and transforms (phase 1)
   binlog/                  LOG-T*-I*.DAT layout (phase 1)
   db/                      psycopg access to config and testlog
+  settings.py              ASTRA_BRIDGE_PORT and ASTRA_STAGE_COUNT
   bridge/                  UDP, DAT, test poll, embedded OPC UA
   tmoip/                   minor-frame reassembly
   exporter/                Jobs to testlog tables
@@ -154,7 +155,11 @@ Oracle fixtures are described in `fixtures/README.md`.
 
 ## Still open
 
+`ASTRA_BRIDGE_PORT` defaults to the legacy literal 2357. `ASTRA_STAGE_COUNT`
+defaults to 2. Both are set in `deploy/astra.env.example`. Exporter jobs are
+keyed by `(test id, packet id)`; `intf_id` is a generated UUID.
+
 Unresolved questions are in `docs/MIGRATION.md` §7 (EntityDAC hardware editor,
-deployed `Servers.Port`, stage count, `TransformInput`, `Jobs.PacketID` versus
-`IntfID`, decoder counters, LabVIEW cutover owner, Mojo license for a client
-install). The license for this repository is also still unchosen.
+`TransformInput`, decoder counters, the historical OPC DA server name,
+LabVIEW cutover owner, Mojo license for a client install). The license for
+this repository is also still unchosen.
