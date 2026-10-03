@@ -1,18 +1,20 @@
 # Deployment templates
 
-Three long-running services, all idle placeholders until the port fills them
-in:
+The Windows services were the bridge, TMoIP, and the log exporter. Each
+becomes one Linux process. The desktop twins are not separate units. The web
+app is a fourth process: it replaces the configurator and test manager, which
+were VCL programs rather than services.
 
-| Unit | Process | Role |
+| Unit | Process | Role now |
 | --- | --- | --- |
-| `astra-bridge.service` | `astra-bridge` | OPC UA server (asyncua) that replaces OPC DA and NI shared variables. LabVIEW subscribes to the tags it will publish. |
-| `astra-telemetry.service` | `astra-telemetry` | Telemetry decoder and encoder. |
-| `astra-web.service` | `astra-web` | Operator web UI. No HTTP framework is selected yet. |
+| `astra-bridge.service` | `astra-bridge` | UDP bridge, `.DAT` logging, test poll, and the in-process OPC UA server. Idle until the bridge is ported. |
+| `astra-tmoip.service` | `astra-tmoip` | Minor-frame reassembly. Idle until phase 4. |
+| `astra-exporter.service` | `astra-exporter` | `Jobs` poll and `testlog` load. Idle until phase 5. |
+| `astra-web.service` | `astra-web` | FastAPI. Serves `GET /health` only. |
 
-The codec, exporter, and database access layer are libraries used by those
-processes, not separate units. The bridge placeholder does not bind
-`ASTRA_OPCUA_ENDPOINT`. Telemetry does not decode. The web process does not
-listen.
+`astra.codec`, `astra.binlog`, `astra.db`, and `astra.opcua` are libraries.
+`astra.cli` is three commands (`generate`, `device`, `tm_encoder`), not units.
+The bridge does not bind its UDP port or the OPC UA endpoint yet.
 
 ## Host layout
 
@@ -27,13 +29,10 @@ sudo systemd-sysusers deploy/sysusers.d/astra.conf
 sudo install -d -o astra -g astra /var/lib/astra /etc/astra
 sudo install -m 0640 -o root -g astra deploy/astra.env.example /etc/astra/astra.env
 sudoedit /etc/astra/astra.env
-sudo cp deploy/systemd/astra-bridge.service /etc/systemd/system/
-sudo cp deploy/systemd/astra-telemetry.service /etc/systemd/system/
-sudo cp deploy/systemd/astra-web.service /etc/systemd/system/
+sudo cp deploy/systemd/astra-*.service /etc/systemd/system/
 sudo systemctl daemon-reload
-sudo systemctl enable --now astra-bridge.service astra-telemetry.service astra-web.service
+sudo systemctl enable --now astra-bridge.service astra-tmoip.service astra-exporter.service astra-web.service
 ```
 
-`ExecStart` expects an editable or regular install in the virtualenv so the
-console scripts exist. `After=postgresql.service` orders startup when
-PostgreSQL is installed; it does not pull the database in by itself.
+`After=postgresql.service` orders startup when PostgreSQL is installed. It
+does not pull the database in by itself.

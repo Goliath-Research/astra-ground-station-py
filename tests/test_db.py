@@ -2,9 +2,9 @@ from pathlib import Path
 
 import pytest
 
-from astra_ground_station.db.connection import database_url_from_env
-from astra_ground_station.db.errors import DatabaseConfigError, SchemaLoadError
-from astra_ground_station.db.schema_loader import default_schema_dir, list_schema_files
+from astra.db.connection import database_url_from_env
+from astra.db.errors import DatabaseConfigError, SchemaLoadError
+from astra.db.schema_loader import default_schema_dir, list_schema_files
 
 
 def test_database_url_requires_postgres_and_hides_the_value() -> None:
@@ -35,6 +35,14 @@ def test_list_schema_files_sorts_sql_and_refuses_data_dumps(tmp_path: Path) -> N
     (tmp_path / "02_data.sql").write_text("-- dump\n", encoding="utf-8")
     with pytest.raises(SchemaLoadError, match="02_data.sql"):
         list_schema_files(tmp_path)
+
+
+def test_repo_schema_files_load_in_order() -> None:
+    root = Path(__file__).resolve().parents[1] / "database" / "schema"
+    assert [path.name for path in list_schema_files(root)] == [
+        "01_schema.sql",
+        "03_programmability.sql",
+    ]
 
 
 def test_default_schema_dir_follows_env(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:

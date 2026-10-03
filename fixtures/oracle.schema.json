@@ -1,0 +1,49 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/Goliath-Research/astra-ground-station-py/fixtures/oracle.schema.json",
+  "title": "Astra Win64 oracle fixture",
+  "description": "One file written by the Win64 harness in fixtures/oracle/. See fixtures/README.md and docs/MIGRATION.md section 6.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["format_version", "case_id", "kind", "description", "harness"],
+  "properties": {
+    "format_version": { "const": 1 },
+    "case_id": { "type": "string", "pattern": "^[a-z0-9_]+$" },
+    "kind": { "enum": ["pack", "transform", "dat"] },
+    "description": { "type": "string", "minLength": 1 },
+    "harness": { "$ref": "#/$defs/harness" },
+    "layout": { "type": "array" },
+    "values": { "type": "array" },
+    "packed_hex": { "type": "string", "pattern": "^[0-9a-f]*$" },
+    "transform_id": { "type": "integer", "minimum": 1, "maximum": 14 },
+    "float64_hex": { "type": "string", "pattern": "^[0-9a-f]{16}$" },
+    "dat_file": { "type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9_.-]*$" },
+    "sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" }
+  },
+  "allOf": [
+    {
+      "if": { "properties": { "kind": { "const": "pack" } }, "required": ["kind"] },
+      "then": { "required": ["layout", "values", "packed_hex"] }
+    },
+    {
+      "if": { "properties": { "kind": { "const": "transform" } }, "required": ["kind"] },
+      "then": { "required": ["transform_id", "float64_hex"] }
+    },
+    {
+      "if": { "properties": { "kind": { "const": "dat" } }, "required": ["kind"] },
+      "then": { "required": ["dat_file", "sha256"] }
+    }
+  ],
+  "$defs": {
+    "harness": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["repo", "git_sha", "platform"],
+      "properties": {
+        "repo": { "const": "Goliath-Research/astra-ground-station" },
+        "git_sha": { "type": "string", "pattern": "^[0-9a-f]{40}$" },
+        "platform": { "const": "win64" }
+      }
+    }
+  }
+}

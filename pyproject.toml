@@ -11,7 +11,9 @@ requires-python = ">=3.12"
 authors = [{ name = "David Izada Rodriguez", email = "davidizadar@GoliathResearch.com" }]
 dependencies = [
     "asyncua>=2.0,<3",
+    "fastapi>=0.115,<1",
     "psycopg[binary]>=3.2,<4",
+    "uvicorn>=0.32,<1",
 ]
 
 [project.optional-dependencies]
@@ -26,18 +28,23 @@ dev = [
 ]
 
 [project.scripts]
-astra-bridge = "astra_ground_station.bridge.__main__:main"
-astra-telemetry = "astra_ground_station.telemetry.__main__:main"
-astra-web = "astra_ground_station.web.__main__:main"
-astra-load-schema = "astra_ground_station.db.schema_loader:main"
+astra-bridge = "astra.bridge.__main__:main"
+astra-exporter = "astra.exporter.__main__:main"
+astra-load-schema = "astra.db.schema_loader:main"
+astra-tmoip = "astra.tmoip.__main__:main"
+astra-web = "astra.web.__main__:main"
 
 [project.urls]
 Homepage = "https://github.com/Goliath-Research/astra-ground-station-py"
 Legacy = "https://github.com/Goliath-Research/astra-ground-station"
 Migration = "https://github.com/Goliath-Research/astra-ground-station/blob/main/MIGRATION.md"
+MigrationCopy = "https://github.com/Goliath-Research/astra-ground-station-py/blob/main/docs/MIGRATION.md"
 
 [tool.hatch.version]
-path = "src/astra_ground_station/__init__.py"
+path = "src/astra/__init__.py"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/astra"]
 
 [tool.ruff]
 target-version = "py312"
@@ -48,7 +55,7 @@ src = ["src", "tests"]
 select = ["E", "F", "I", "UP", "B"]
 
 [tool.ruff.lint.isort]
-known-first-party = ["astra_ground_station"]
+known-first-party = ["astra"]
 
 [tool.mypy]
 python_version = "3.12"
