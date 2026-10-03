@@ -6,24 +6,50 @@ from pathlib import Path
 import psycopg
 import pytest
 
-from astra_ground_station.db.connection import check_connection, database_url_from_env
-from astra_ground_station.db.schema_loader import apply_schema
+from astra.db.connection import DEFAULT_SEARCH_PATH, connect, database_url_from_env
+from astra.db.schema_loader import apply_schema
 
 pytestmark = pytest.mark.skipif(
     not os.environ.get("DATABASE_URL"),
     reason="DATABASE_URL is not set",
 )
 
+_FUNCTIONS = (
+    ("config", "spcalcvartypesizes"),
+    ("testlog", "spimportvalues"),
+)
 
-def test_loader_connects_and_schemas_follow_scripts() -> None:
+
+def _function_count(url: str) -> int:
+    with psycopg.connect(url) as conn:
+        row = conn.execute(
+            """
+            SELECT COUNT(*)
+            FROM pg_proc AS p
+            JOIN pg_namespace AS n ON n.oid = p.pronamespace
+            WHERE (n.nspname, p.proname) IN (
+                ('config', 'spcalcvartypesizes'),
+                ('testlog', 'spimportvalues')
+            )
+            """
+        ).fetchone()
+    if row is None:
+        return 0
+    count = row[0]
+    if not isinstance(count, int):
+        raise AssertionError("function count was not an integer")
+    return count
+
+
+def test_schema_scripts_load_config_and_testlog() -> None:
     url = database_url_from_env()
     schema_dir = Path(__file__).resolve().parents[1] / "database" / "schema"
-    applied = apply_schema(url, schema_dir)
-    check_connection(url)
-    if not applied:
-        return
+    if _function_count(url) < len(_FUNCTIONS):
+        applied = [path.name for path in apply_schema(url, schema_dir)]
+        assert applied == ["01_schema.sql", "03_programmability.sql"]
+    assert _function_count(url) == len(_FUNCTIONS)
     with psycopg.connect(url) as conn:
-        rows = conn.execute(
+        schemas = conn.execute(
             """
             SELECT schema_name
             FROM information_schema.schemata
@@ -31,5 +57,18 @@ def test_loader_connects_and_schemas_follow_scripts() -> None:
             ORDER BY schema_name
             """
         ).fetchall()
-    present = [row[0] for row in rows]
-    assert present == ["config", "testlog"]
+        collations = conn.execute(
+            """
+            SELECT n.nspname
+            FROM pg_collation AS c
+            JOIN pg_namespace AS n ON n.oid = c.collnamespace
+            WHERE n.nspname IN ('config', 'testlog') AND c.collname = 'mssql_order'
+            ORDER BY n.nspname
+            """
+        ).fetchall()
+    assert [row[0] for row in schemas] == ["config", "testlog"]
+    assert [row[0] for row in collations] == ["config", "testlog"]
+    with connect(url) as conn:
+        search_path = conn.execute("SHOW search_path").fetchone()
+    assert search_path is not None
+    assert search_path[0] == DEFAULT_SEARCH_PATH

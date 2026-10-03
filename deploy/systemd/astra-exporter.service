@@ -1,0 +1,22 @@
+[Unit]
+Description=Astra test-log exporter
+Documentation=https://github.com/Goliath-Research/astra-ground-station-py
+After=network-online.target postgresql.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=astra
+Group=astra
+Environment=PYTHONUNBUFFERED=1
+EnvironmentFile=-/etc/astra/astra.env
+WorkingDirectory=/opt/astra-ground-station
+StateDirectory=astra
+ExecStart=/opt/astra-ground-station/.venv/bin/astra-exporter
+Restart=on-failure
+RestartSec=5
+NoNewPrivileges=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

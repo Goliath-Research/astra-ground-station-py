@@ -1,5 +1,5 @@
 [Unit]
-Description=Astra ground-station web application
+Description=Astra configurator and test manager (FastAPI)
 Documentation=https://github.com/Goliath-Research/astra-ground-station-py
 After=network-online.target postgresql.service
 Wants=network-online.target

@@ -1,80 +1,94 @@
 # Astra ground station (Python / Mojo)
 
 Private port of David Izada Rodriguez's Astra ground-station software. The
-legacy application is Delphi, ran in production on Win64, and lives in a
-separate repository:
+legacy Delphi application and the migration plan live in a separate
+repository:
 
-- Legacy code, migration plan, and database scripts: [Goliath-Research/astra-ground-station](https://github.com/Goliath-Research/astra-ground-station)
-- Migration plan: [MIGRATION.md](https://github.com/Goliath-Research/astra-ground-station/blob/main/MIGRATION.md)
+- Legacy code and database scripts: [Goliath-Research/astra-ground-station](https://github.com/Goliath-Research/astra-ground-station)
+- Migration plan (source of truth): [MIGRATION.md](https://github.com/Goliath-Research/astra-ground-station/blob/main/MIGRATION.md)
+- Copy in this repo: [docs/MIGRATION.md](docs/MIGRATION.md). The legacy copy wins if they disagree.
 
-This repository is the Linux port. It does not contain the Delphi sources.
-If this layout and `MIGRATION.md` disagree, `MIGRATION.md` is the source of
-truth.
+Python is the language for services, tools, and I/O. Mojo is reserved for
+`pack_records` / `unpack_records` if a profile says the Python packer is hot.
+PostgreSQL replaces SQL Server. OPC UA (asyncua), inside the bridge process,
+replaces OPC DA and NI shared variables. LabVIEW subscribes to tags the
+bridge publishes.
 
-Python is the main language. Mojo is accepted for performance-critical parts
-(free to use is enough). Plain Python, or the existing C code via cffi, are
-the fallbacks. The Python package runs without Mojo installed.
-
-Targets are Ubuntu on x86_64 and ARM64. OPC UA ([asyncua](https://github.com/FreeOpcUa/opcua-asyncio))
-replaces OPC DA and NI shared variables; LabVIEW will subscribe to tags the
-bridge publishes. PostgreSQL replaces MSSQL, with schemas `config` and
-`testlog`, lowercase unquoted identifiers, and procedures translated as
-PL/pgSQL functions.
-
-No business logic is ported yet. The service processes idle until a signal.
-The codec, telemetry decoder, and telemetry encoder raise or stay unused on
-purpose.
+No business logic is ported yet. The bridge, TMoIP decoder, and exporter idle
+until a signal. `pack`, `unpack`, reassembly, and export raise
+`NotImplementedError`. The web app is FastAPI and answers `GET /health` only.
 
 ## License
 
 No license has been chosen. This repository is private. All rights reserved.
-Do not copy, redistribute, or treat it as open source. There is no `LICENSE`
-file until one is chosen.
+Do not copy or redistribute it. There is no `LICENSE` file until one is chosen.
 
 ## Layout
 
 ```
-deploy/                         systemd units, sysusers snippet, env example
-database/schema/                future PL/pgSQL scripts (no data dumps)
-mojo/                           optional Mojo placeholder and build notes
-src/astra_ground_station/
-  bridge/                       OPC UA service (astra-bridge)
-  codec/                        frame codec library (not ported)
-  db/                           PostgreSQL access and schema loader
-  exporter/                     export library (not ported)
-  native.py                     backend selection; Python only today
-  telemetry/                    decoder, encoder, and astra-telemetry
-  web/                          web UI placeholder (astra-web)
-tests/golden/                   fixtures the Win64 harness will emit
-tests/                          one smoke test per package, plus fixture and db tests
+docs/MIGRATION.md          copy of the legacy plan; the legacy file wins
+database/schema/           01_schema.sql then 03_programmability.sql
+deploy/systemd/            bridge, tmoip, exporter, web
+fixtures/oracle/           Win64 harness output (empty until phase 0)
+fixtures/live/             later captures from the Linux host
+mojo/                      optional placeholder; Python does not import it
+src/astra/
+  codec/                   bit packer and transforms (phase 1)
+  binlog/                  LOG-T*-I*.DAT layout (phase 1)
+  db/                      psycopg access to config and testlog
+  bridge/                  UDP, DAT, test poll, embedded OPC UA
+  tmoip/                   minor-frame reassembly
+  exporter/                Jobs to testlog tables
+  opcua/                   asyncua server library used by the bridge
+  web/                     configurator and test manager
+  cli/                     generate, device, tm_encoder
 ```
 
-Three systemd services: the bridge, telemetry, and the web app. The codec,
-exporter, and database layer are libraries. Unit files are templates under
-`deploy/systemd/`; see `deploy/README.md`.
+The import package is `astra`, as in the migration plan. The distribution
+name remains `astra-ground-station`.
 
-## Python version
+## Processes
 
-CPython 3.12. It is the default `python3` on Ubuntu 24.04 for both amd64 and
-arm64, so a ground-station host does not need a PPA or a custom build.
-`requires-python` is `>=3.12`. CI pins 3.12, the same interpreter as the
-production OS image. Wheels for `psycopg-binary`, Ruff, and mypy exist for
-CPython 3.12 on x86_64 and aarch64. asyncua 2.x is pure Python. Mojo's Python
-interoperability range includes 3.12.
+| How it is started | Replaces |
+| --- | --- |
+| `python -m astra.bridge` | `AstraBridgeServer` and the desktop twin |
+| `python -m astra.tmoip` | `AstraTMoIP` and the desktop twin |
+| `python -m astra.exporter` | `AstraLogExporter` and the desktop twin |
+| `python -m astra.web` | Configurator and test manager, as a FastAPI app |
+| `python -m astra.cli.generate` | `AstraGenerator` |
+| `python -m astra.cli.device` | `AstraDevice` |
+| `python -m astra.cli.tm_encoder` | `AstraTMEncoder`, headless |
 
-## Dependencies
+Unit files are under `deploy/systemd/`. See `deploy/README.md`.
+
+## Porting order
+
+`docs/MIGRATION.md` §6. Phase 0 is the Win64 oracle harness (that program
+stays in the legacy repo) and loading this schema when a later phase needs
+the database. The schema is loaded now so CI can execute the functions. Phase
+1 is the codec, transforms, and `.DAT` files. Do not start with the
+configurator UI.
+
+## Python and dependencies
+
+CPython 3.12, Ubuntu 24.04's default `python3` on amd64 and arm64.
+`requires-python` is `>=3.12`. CI pins 3.12.
 
 | Piece | Choice |
 | --- | --- |
 | Build | hatchling, `src/` layout |
-| OPC UA | `asyncua` 2.x |
-| PostgreSQL | `psycopg` 3 with the `binary` extra, so CI and hosts do not compile `libpq` bindings |
-| Tests | pytest, Hypothesis, pytest-asyncio (ready for later asyncua tests) |
-| Fixtures | jsonschema plus `types-jsonschema`, dev-only, checks `tests/golden/case.schema.json` |
-| Lint | Ruff |
-| Types | mypy in strict mode |
+| HTTP | FastAPI and uvicorn. SQLAlchemy is not a dependency until the web app has CRUD |
+| UDP | stdlib `asyncio` when the bridge is ported |
+| PostgreSQL | psycopg 3 with the `binary` extra. Schema changes after this baseline are planned for Alembic; the verified scripts are applied with `psql` |
+| OPC UA | asyncua 2.x, imported by `astra.opcua` |
+| Tests | pytest, Hypothesis, pytest-asyncio |
+| Oracle JSON | jsonschema and types-jsonschema, dev-only |
+| Lint and types | Ruff, mypy strict |
+| Mojo | optional pin `mojo==1.1.0`, not imported by the service |
 
-Nothing in this stack is commercial or paid.
+Not installed, on purpose: PySide6 (optional desktop fallback), openpyxl
+(only if an XLSX consumer is named), and the Chapter 10 C tree (not on the
+live path). Nothing in this stack is a paid product.
 
 ## Development setup
 
@@ -89,25 +103,23 @@ python -m pip install --upgrade pip
 python -m pip install -e ".[dev]"
 ```
 
-PostgreSQL, when you want the schema job locally:
+PostgreSQL 16, with ICU (Ubuntu's package has it):
 
 ```bash
 sudo apt install -y postgresql postgresql-client
 sudo -u postgres createuser --pwprompt astra
 sudo -u postgres createdb --owner=astra astra
 export DATABASE_URL=postgresql://astra:CHANGE_ME@127.0.0.1:5432/astra
-python -m astra_ground_station.db.schema_loader
-pytest tests/test_postgres.py
+python -m astra.db.schema_loader
+pytest
 ```
 
-`database/schema/` is empty until the ported scripts are copied from the
-legacy repo. Do not commit `02_data.sql` or other dumps. See
-`database/README.md`.
+`02_data.sql` is not loaded. See `database/README.md`.
 
 Mojo is optional. See `mojo/README.md`.
 
 ```bash
-python -m pip install 'mojo>=1.1,<1.2'
+python -m pip install 'mojo==1.1.0'
 mkdir -p mojo/build
 mojo build mojo/placeholder.mojo -o mojo/build/placeholder
 ./mojo/build/placeholder
@@ -123,32 +135,26 @@ mypy
 pytest
 ```
 
-`pytest` skips `tests/test_postgres.py` when `DATABASE_URL` is unset. Golden
-fixtures are described in `tests/golden/README.md`. The Win64 harness that
-produces them belongs in the legacy repository; this repo only consumes the
-files. There is no `.DAT` archive. Further confidence comes from round-trip
-and property tests, and later from simulated devices.
+`tests/test_postgres.py` skips when `DATABASE_URL` is unset. With it set, the
+test loads `01_schema.sql` and `03_programmability.sql` if the functions are
+not already there, then checks schemas, collations, and
+`config.spcalcvartypesizes` / `testlog.spimportvalues`.
+
+Oracle fixtures are described in `fixtures/README.md`.
 
 ## Continuous integration
 
-`.github/workflows/ci.yml` runs on pull requests and on pushes to `main`:
+`.github/workflows/ci.yml`:
 
-- **python** on `ubuntu-24.04` and `ubuntu-24.04-arm`: Ruff, mypy, pytest
-- **postgres** on `ubuntu-24.04`: PostgreSQL 16 service container, schema
-  loader, `tests/test_postgres.py`
-- **mojo** on both runners: install the stable Mojo SDK and build
-  `mojo/placeholder.mojo`. If the SDK cannot be installed or will not start
-  on that architecture, the build step is skipped and the job does not fail.
-  A compile or run failure after a successful install fails the job.
+- **python** on `ubuntu-24.04` and `ubuntu-24.04-arm`: PostgreSQL 16, schema
+  load, Ruff, mypy, pytest
+- **mojo** on both runners: install Mojo 1.1.0 and build
+  `mojo/placeholder.mojo`. If that pin cannot be installed or will not start,
+  the build step is skipped and the job stays green
 
-## Open decisions
+## Still open
 
-- Confirm the three services (bridge, telemetry, web) against `MIGRATION.md`.
-  The exporter is a library in this scaffold, not its own unit.
-- Web framework is undecided. None is installed.
-- The OPC UA tag dictionary LabVIEW will subscribe to is not defined.
-- PostgreSQL 16 matches Ubuntu 24.04. Say if production should track a
-  different major version.
-- License: still unlicensed and private.
-- Which hot paths move to Mojo, and which stay on Python or cffi, is later
-  work. `ASTRA_NATIVE_BACKEND=mojo` is rejected until a binding exists.
+Unresolved questions are in `docs/MIGRATION.md` §7 (EntityDAC hardware editor,
+deployed `Servers.Port`, stage count, `TransformInput`, `Jobs.PacketID` versus
+`IntfID`, decoder counters, LabVIEW cutover owner, Mojo license for a client
+install). The license for this repository is also still unchosen.

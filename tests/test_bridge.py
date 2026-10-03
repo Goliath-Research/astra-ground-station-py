@@ -1,11 +1,8 @@
-from astra_ground_station.bridge import DEFAULT_ENDPOINT, opcua_endpoint, opcua_library_version
-from astra_ground_station.bridge.__main__ import main
+from astra.bridge.__main__ import main
+from astra.opcua import DEFAULT_ENDPOINT, endpoint, tag_path
 
 
-def test_bridge_entrypoint_and_endpoint() -> None:
-    assert opcua_library_version() != "unknown"
-    assert opcua_endpoint({}) == DEFAULT_ENDPOINT
-    assert opcua_endpoint({"ASTRA_OPCUA_ENDPOINT": "opc.tcp://127.0.0.1:4841/"}) == (
-        "opc.tcp://127.0.0.1:4841/"
-    )
+def test_bridge_entrypoint_uses_opcua_tags() -> None:
+    assert endpoint({}) == DEFAULT_ENDPOINT
+    assert tag_path("R2L", "t_ms") == "AstraR2L/t_ms"
     assert main(["--check"]) == 0

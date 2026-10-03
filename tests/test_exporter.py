@@ -1,6 +1,10 @@
-from astra_ground_station.exporter import EXPORT_HEADER, export_rows
+import pytest
+
+from astra.exporter import export_job
+from astra.exporter.__main__ import main
 
 
-def test_export_placeholder_ignores_rows() -> None:
-    assert export_rows([]) == EXPORT_HEADER
-    assert export_rows([{"id": 1}]) == EXPORT_HEADER
+def test_exporter_is_not_ported() -> None:
+    with pytest.raises(NotImplementedError, match="exporter"):
+        export_job(1, 2)
+    assert main(["--check"]) == 0

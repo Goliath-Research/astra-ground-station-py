@@ -1,6 +1,6 @@
 import pytest
 
-from astra_ground_station.native import active_backend
+from astra.native import active_backend
 
 
 def test_default_backend_is_python(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -10,5 +10,5 @@ def test_default_backend_is_python(monkeypatch: pytest.MonkeyPatch) -> None:
 
 def test_mojo_backend_is_not_built(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("ASTRA_NATIVE_BACKEND", "mojo")
-    with pytest.raises(RuntimeError, match="no Python binding"):
+    with pytest.raises(RuntimeError, match="pack_records"):
         active_backend()

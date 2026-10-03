@@ -1,5 +1,5 @@
 [Unit]
-Description=Astra ground-station OPC UA bridge
+Description=Astra UDP bridge with an embedded OPC UA server
 Documentation=https://github.com/Goliath-Research/astra-ground-station-py
 After=network-online.target postgresql.service
 Wants=network-online.target
