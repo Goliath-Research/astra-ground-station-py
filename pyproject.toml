@@ -1,0 +1,71 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "astra-ground-station"
+dynamic = ["version"]
+description = "Private Python/Mojo port of the Astra ground-station software."
+readme = "README.md"
+requires-python = ">=3.12"
+authors = [{ name = "David Izada Rodriguez", email = "davidizadar@GoliathResearch.com" }]
+dependencies = [
+    "asyncua>=2.0,<3",
+    "psycopg[binary]>=3.2,<4",
+]
+
+[project.optional-dependencies]
+dev = [
+    "hypothesis>=6.112",
+    "jsonschema>=4.23",
+    "mypy>=1.14",
+    "pytest>=8.3",
+    "types-jsonschema>=4.23",
+    "pytest-asyncio>=0.25",
+    "ruff>=0.9",
+]
+
+[project.scripts]
+astra-bridge = "astra_ground_station.bridge.__main__:main"
+astra-telemetry = "astra_ground_station.telemetry.__main__:main"
+astra-web = "astra_ground_station.web.__main__:main"
+astra-load-schema = "astra_ground_station.db.schema_loader:main"
+
+[project.urls]
+Homepage = "https://github.com/Goliath-Research/astra-ground-station-py"
+Legacy = "https://github.com/Goliath-Research/astra-ground-station"
+Migration = "https://github.com/Goliath-Research/astra-ground-station/blob/main/MIGRATION.md"
+
+[tool.hatch.version]
+path = "src/astra_ground_station/__init__.py"
+
+[tool.ruff]
+target-version = "py312"
+line-length = 100
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B"]
+
+[tool.ruff.lint.isort]
+known-first-party = ["astra_ground_station"]
+
+[tool.mypy]
+python_version = "3.12"
+strict = true
+warn_unused_configs = true
+mypy_path = "src"
+files = ["src", "tests"]
+
+[[tool.mypy.overrides]]
+module = ["asyncua", "asyncua.*"]
+ignore_missing_imports = true
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"
+markers = [
+    "postgres: needs DATABASE_URL and a PostgreSQL server",
+]

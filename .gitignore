@@ -1,0 +1,38 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+*.egg-info/
+dist/
+build/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# Local Mojo / pixi environments. The placeholder binary is a build product.
+.pixi/
+.magic/
+mojo/build/
+
+# Secrets and local environment
+.env
+.env.*
+!.env.example
+secrets/
+*.pem
+*.key
+
+# Editor backups, database dumps, and the legacy data extract.
+# Schema scripts under database/schema/ are tracked; data is not.
+*.bak
+*.dump
+*.dmp
+*.bacpac
+02_data.sql
+
+# Local capture and export output
+/captures/
+/exports/
