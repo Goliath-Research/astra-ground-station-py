@@ -1,0 +1,130 @@
+# Lint, type-check, and pytest on Ubuntu 24.04 for x86_64 and ARM64.
+# ubuntu-24.04-arm is a standard GitHub-hosted runner, including for private
+# repositories. The Mojo job stays green when the SDK cannot be installed or
+# will not start; a build failure after a successful install still fails CI.
+
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  python:
+    name: lint, type-check, pytest (${{ matrix.runner }})
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        runner: [ubuntu-24.04, ubuntu-24.04-arm]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install package and dev tools
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e ".[dev]"
+      - name: Ruff
+        run: ruff check src tests
+      - name: Ruff format
+        run: ruff format --check src tests
+      - name: Mypy
+        run: mypy
+      - name: Pytest
+        run: pytest
+
+  postgres:
+    name: postgres schema loader
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: astra
+          POSTGRES_PASSWORD: astra
+          POSTGRES_DB: astra
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U astra -d astra"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install PostgreSQL client
+        run: sudo apt-get update && sudo apt-get install -y postgresql-client
+      - name: Install package
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e ".[dev]"
+      - name: Load schema
+        env:
+          DATABASE_URL: postgresql://astra:astra@127.0.0.1:5432/astra
+        run: python -m astra_ground_station.db.schema_loader
+      - name: Schema integration tests
+        env:
+          DATABASE_URL: postgresql://astra:astra@127.0.0.1:5432/astra
+        run: pytest tests/test_postgres.py
+
+  mojo:
+    name: mojo placeholder (${{ matrix.runner }})
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        runner: [ubuntu-24.04, ubuntu-24.04-arm]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install Mojo SDK when this architecture provides it
+        id: sdk
+        run: |
+          set +e
+          python -m pip install --upgrade pip
+          python -m pip install 'mojo>=1.1,<1.2'
+          install_status=$?
+          set -e
+          if [ "$install_status" -ne 0 ]; then
+            echo "available=false" >> "$GITHUB_OUTPUT"
+            echo "::notice title=Mojo SDK unavailable::pip could not install mojo on ${{ matrix.runner }}. The build step is skipped."
+            exit 0
+          fi
+          if ! command -v mojo >/dev/null 2>&1; then
+            echo "::error::pip installed mojo but the mojo executable is not on PATH."
+            exit 1
+          fi
+          set +e
+          mojo --version
+          version_status=$?
+          set -e
+          if [ "$version_status" -ne 0 ]; then
+            echo "available=false" >> "$GITHUB_OUTPUT"
+            echo "::notice title=Mojo SDK unavailable::mojo does not run on ${{ matrix.runner }}. The build step is skipped."
+            exit 0
+          fi
+          echo "available=true" >> "$GITHUB_OUTPUT"
+      - name: Build and run the placeholder
+        if: steps.sdk.outputs.available == 'true'
+        run: |
+          mkdir -p mojo/build
+          mojo build mojo/placeholder.mojo -o mojo/build/placeholder
+          ./mojo/build/placeholder
