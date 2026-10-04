@@ -104,12 +104,14 @@ def _cleanup(url: str, root_id: int | None, server_id: int | None) -> None:
                 """,
                 (root_id,),
             )
-            stage = conn.execute(
-                "SELECT id FROM treeversions WHERE parentid = %s AND iconid = 2",
-                (root_id,),
-            ).fetchone()
-            if stage is not None:
-                conn.execute("SELECT spdelete(%s)", (stage[0],))
+            while True:
+                child = conn.execute(
+                    "SELECT id FROM treeversions WHERE parentid = %s ORDER BY id",
+                    (root_id,),
+                ).fetchone()
+                if child is None:
+                    break
+                conn.execute("SELECT spdelete(%s)", (child[0],))
             conn.execute("DELETE FROM treeversions WHERE id = %s", (root_id,))
         conn.commit()
 
@@ -272,6 +274,33 @@ def test_tree_packet_fields_sizes_and_stream(
         _cleanup(database_url, root_id, None)
 
 
+def test_deleting_a_vehicle_leaves_its_children(
+    client: TestClient,
+    database_url: str,
+) -> None:
+    root_id: int | None = None
+    _wipe_named_fixtures(database_url)
+    try:
+        vehicle = client.post("/api/tree", json={"name": "p6-vehicle", "icon_id": 1})
+        assert vehicle.status_code == 201
+        root_id = vehicle.json()["id"]
+        stage = client.post(
+            "/api/tree",
+            json={"name": "p6-stage", "parent_id": root_id, "icon_id": 2},
+        )
+        assert stage.status_code == 201
+        stage_id = stage.json()["id"]
+        removed = client.delete(f"/api/tree/{root_id}")
+        assert removed.status_code == 204
+        rows = client.get("/api/tree").json()
+        assert "p6-vehicle" not in [row["name"] for row in rows]
+        remaining = next(row for row in rows if row["id"] == stage_id)
+        assert remaining["name"] == "p6-stage"
+        assert remaining["parent_id"] == root_id
+    finally:
+        _cleanup(database_url, root_id, None)
+
+
 def test_create_seq_is_a_sibling_position(client: TestClient, database_url: str) -> None:
     root_id: int | None = None
     _wipe_named_fixtures(database_url)
@@ -412,6 +441,254 @@ def test_server_password_is_write_only(
         assert _PASSWORD_NEXT not in jobs.text
     finally:
         _cleanup(database_url, None, server_id)
+
+
+def _ensure_u8(url: str, scope_id: int) -> None:
+    with connect(url) as conn:
+        conn.execute(
+            """
+            INSERT INTO vartypes (id, name, scopeid, encsize, decsize)
+            VALUES (2, 'u8', %s, 8, 8)
+            ON CONFLICT (id) DO NOTHING
+            """,
+            (scope_id,),
+        )
+        conn.execute(
+            """
+            UPDATE vartypes
+            SET encsize = 8, decsize = 8
+            WHERE id = 2 AND encsize IS NULL
+            """
+        )
+        conn.execute("SELECT identity_insert_bump('config.vartypes', 'id', 2)")
+        conn.commit()
+
+
+def test_duplicate_copies_a_stage_and_a_packet(client: TestClient, database_url: str) -> None:
+    root_id: int | None = None
+    _wipe_named_fixtures(database_url)
+    try:
+        vehicle = client.post("/api/tree", json={"name": "p6-vehicle", "icon_id": 1})
+        assert vehicle.status_code == 201
+        root_id = vehicle.json()["id"]
+        refused = client.post(f"/api/tree/{root_id}/duplicate")
+        assert refused.status_code == 400
+        stage = client.post(
+            "/api/tree",
+            json={"name": "p6-stage", "parent_id": root_id, "icon_id": 2},
+        )
+        assert stage.status_code == 201
+        stage_id = stage.json()["id"]
+        version = client.post(
+            "/api/tree",
+            json={"name": "p6-version", "parent_id": stage_id, "icon_id": 3},
+        )
+        assert version.status_code == 201
+        copied = client.post(f"/api/tree/{stage_id}/duplicate")
+        assert copied.status_code == 201
+        copy = copied.json()
+        assert copy["id"] != stage_id
+        assert copy["parent_id"] == root_id
+        assert copy["icon_id"] == 2
+        assert copy["name"] == "Stage"
+        children = [row for row in client.get("/api/tree").json() if row["parent_id"] == copy["id"]]
+        assert [row["name"] for row in children] == ["Version"]
+        assert children[0]["icon_id"] == 3
+
+        smart = client.post(
+            "/api/tree",
+            json={"name": "p6-smart", "parent_id": version.json()["id"], "icon_id": 5},
+        )
+        packet_node = client.post(
+            "/api/tree",
+            json={"name": "p6-r2l", "parent_id": smart.json()["id"], "icon_id": 7},
+        )
+        assert packet_node.status_code == 201
+        node_id = packet_node.json()["id"]
+        empty = client.post(f"/api/tree/{node_id}/duplicate")
+        assert empty.status_code == 400
+        siblings = [
+            row for row in client.get("/api/tree").json() if row["parent_id"] == smart.json()["id"]
+        ]
+        assert [row["id"] for row in siblings] == [node_id]
+        _ensure_u8(database_url, root_id)
+        saved = client.put(
+            f"/api/nodes/{node_id}/packet",
+            json={"packet_id": 910062, "name": "p6-r2l", "is_input": False},
+        )
+        assert saved.status_code == 200
+        var_type_id = saved.json()["var_type_id"]
+        field = client.post(
+            f"/api/vartypes/{var_type_id}/fields",
+            json={"name": "flags", "type_id": 2, "qty": 1},
+        )
+        assert field.status_code == 201
+        packet_copy = client.post(f"/api/tree/{node_id}/duplicate")
+        assert packet_copy.status_code == 201
+        assert packet_copy.json()["name"] == "p6-r2l"
+        assert packet_copy.json()["icon_id"] == 7
+        cloned = client.get(f"/api/nodes/{packet_copy.json()['id']}/packet")
+        assert cloned.status_code == 200
+        assert cloned.json()["packet_id"] != 910062
+        assert cloned.json()["is_input"] is False
+        cloned_fields = client.get(f"/api/vartypes/{cloned.json()['var_type_id']}/fields")
+        assert cloned_fields.status_code == 200
+        assert [row["name"] for row in cloned_fields.json()] == ["flags"]
+        assert cloned_fields.json()[0]["connection_id"] is None
+    finally:
+        _cleanup(database_url, root_id, None)
+
+
+def test_mapping_links_a_field_and_lists_the_pin(
+    client: TestClient,
+    database_url: str,
+) -> None:
+    root_id: int | None = None
+    _wipe_named_fixtures(database_url)
+    try:
+        vehicle = client.post("/api/tree", json={"name": "p6-vehicle", "icon_id": 1})
+        root_id = vehicle.json()["id"]
+        stage = client.post(
+            "/api/tree",
+            json={"name": "p6-stage", "parent_id": root_id, "icon_id": 2},
+        )
+        version = client.post(
+            "/api/tree",
+            json={"name": "p6-version", "parent_id": stage.json()["id"], "icon_id": 3},
+        )
+        release = client.post(
+            "/api/tree",
+            json={"name": "p6-release", "parent_id": version.json()["id"], "icon_id": 4},
+        )
+        smart = client.post(
+            "/api/tree",
+            json={"name": "p6-smart", "parent_id": release.json()["id"], "icon_id": 5},
+        )
+        smart_id = smart.json()["id"]
+        packet_node = client.post(
+            "/api/tree",
+            json={"name": "p6-r2l", "parent_id": smart_id, "icon_id": 7},
+        )
+        node_id = packet_node.json()["id"]
+        _ensure_u8(database_url, root_id)
+        saved = client.put(
+            f"/api/nodes/{node_id}/packet",
+            json={"packet_id": 910063, "name": "p6-r2l", "is_input": False},
+        )
+        var_type_id = saved.json()["var_type_id"]
+        with connect(database_url) as conn:
+            conn.execute(
+                """
+                INSERT INTO vartypes (id, name, scopeid)
+                VALUES (910200, 'p6-inner', %s)
+                ON CONFLICT (id) DO UPDATE
+                SET name = EXCLUDED.name, scopeid = EXCLUDED.scopeid
+                """,
+                (node_id,),
+            )
+            conn.execute("SELECT identity_insert_bump('config.vartypes', 'id', 910200)")
+            hardware = conn.execute(
+                """
+                INSERT INTO treeversions (name, parentid, iconid)
+                VALUES ('p6-hardware', %s, 8)
+                RETURNING id
+                """,
+                (smart_id,),
+            ).fetchone()
+            if hardware is None:
+                raise AssertionError("hardware node was not inserted")
+            area = conn.execute(
+                """
+                INSERT INTO treeversions (name, parentid, iconid)
+                VALUES ('p6-area', %s, 9)
+                RETURNING id
+                """,
+                (hardware[0],),
+            ).fetchone()
+            if area is None:
+                raise AssertionError("area node was not inserted")
+            board = conn.execute(
+                """
+                INSERT INTO treeversions (name, parentid, iconid)
+                VALUES ('p6-board', %s, 10)
+                RETURNING id
+                """,
+                (area[0],),
+            ).fetchone()
+            if board is None:
+                raise AssertionError("board node was not inserted")
+            pin = conn.execute(
+                """
+                INSERT INTO connections (boardid, firstpin, shortname, description)
+                VALUES (%s, 3, 'p6-pin', 'p6 pin')
+                RETURNING id
+                """,
+                (board[0],),
+            ).fetchone()
+            if pin is None or not isinstance(pin[0], int):
+                raise AssertionError("connection was not inserted")
+            connection_id = pin[0]
+            conn.commit()
+        nested = client.post(
+            f"/api/vartypes/{var_type_id}/fields",
+            json={"name": "inner", "type_id": 910200, "qty": 1},
+        )
+        assert nested.status_code == 201
+        leaf = client.post(
+            "/api/vartypes/910200/fields",
+            json={"name": "pinfield", "type_id": 2, "qty": 1},
+        )
+        assert leaf.status_code == 201
+        field_id = leaf.json()["id"]
+        missing = client.post(
+            "/api/mappings",
+            json={"field_id": field_id, "connection_id": 999999},
+        )
+        assert missing.status_code == 404
+        linked = client.post(
+            "/api/mappings",
+            json={"field_id": field_id, "connection_id": connection_id},
+        )
+        assert linked.status_code == 200
+        assert linked.json()["connection_id"] == connection_id
+        listed = client.get(f"/api/nodes/{node_id}/mappings")
+        assert listed.status_code == 200
+        assert len(listed.json()) == 1
+        row = listed.json()[0]
+        assert row["field"] == "pinfield"
+        assert row["area"] == "p6-area"
+        assert row["board"] == "p6-board"
+        assert row["first_pin"] == 3
+        assert row["connection_id"] == connection_id
+        root_field = client.post(
+            f"/api/vartypes/{var_type_id}/fields",
+            json={"name": "flags", "type_id": 2, "qty": 1},
+        )
+        assert root_field.status_code == 201
+        root_field_id = root_field.json()["id"]
+        root_linked = client.post(
+            "/api/mappings",
+            json={"field_id": root_field_id, "connection_id": connection_id},
+        )
+        assert root_linked.status_code == 200
+        both = client.get(f"/api/nodes/{node_id}/mappings")
+        assert both.status_code == 200
+        by_name = {item["field"]: item for item in both.json()}
+        assert set(by_name) == {"pinfield", "flags"}
+        assert by_name["flags"]["field_id"] == root_field_id
+        assert by_name["flags"]["area"] == "p6-area"
+        assert by_name["flags"]["first_pin"] == 3
+        cleared_root = client.delete(f"/api/mappings/{root_field_id}")
+        assert cleared_root.status_code == 200
+        assert cleared_root.json()["connection_id"] is None
+        after_root = client.get(f"/api/nodes/{node_id}/mappings")
+        assert [item["field"] for item in after_root.json()] == ["pinfield"]
+        cleared = client.delete(f"/api/mappings/{field_id}")
+        assert cleared.status_code == 200
+        assert cleared.json()["connection_id"] is None
+        assert client.get(f"/api/nodes/{node_id}/mappings").json() == []
+    finally:
+        _cleanup(database_url, root_id, None)
 
 
 def test_rejected_server_body_does_not_echo_the_password(client: TestClient) -> None:

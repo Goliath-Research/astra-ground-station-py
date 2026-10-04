@@ -21,9 +21,11 @@ does not apply either step. The default IRIG106 minor frame is the 349-byte
 database layout in `docs/CODEC_DB_ANSWERS.md`. The TMoIP decoder reassembles
 `packet_stream` and forwards `id || body` to the configured bridge port.
 The exporter still raises `NotImplementedError`.
-The web app is FastAPI. `GET /health` is open. `/api` is the configurator
-and test-manager JSON API and requires `ASTRA_WEB_TOKEN`. Server passwords
-are write-only. HTML screens are not served yet.
+The web app is FastAPI. `GET /health` and `GET /` are open. `/` is the
+configurator (tree, packet, fields, mappings, transformations, devices,
+servers, and Send/Rate). `/api` requires `ASTRA_WEB_TOKEN`. Server passwords
+are write-only. Tree duplicate and pin mappings call `spduplicate`,
+`spaddmapping`, and `spdelmapping`.
 
 ## License
 

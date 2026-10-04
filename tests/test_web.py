@@ -38,6 +38,34 @@ def test_web_app_exposes_health_and_the_config_api() -> None:
     assert health.json() == {"status": "ok"}
 
 
+def test_operator_page_lists_the_configurator_screens() -> None:
+    app = create_app()
+    with TestClient(app) as client:
+        page = client.get("/")
+        script = client.get("/static/app.js")
+        style = client.get("/static/app.css")
+    assert page.status_code == 200
+    assert "text/html" in page.headers["content-type"]
+    for label in (
+        "Configuration tree",
+        "Packet",
+        "Fields",
+        "Mappings",
+        "Transformations",
+        "Devices",
+        "Servers",
+        "Send / Rate",
+    ):
+        assert label in page.text
+    assert 'id="server-password" type="password"' in page.text
+    assert 'id="token" type="password"' in page.text
+    assert 'id="duplicate-node"' in page.text
+    assert script.status_code == 200
+    assert style.status_code == 200
+    assert "console.log" not in script.text
+    assert "password_set" in script.text
+
+
 def test_api_is_closed_without_a_token(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.delenv("ASTRA_WEB_TOKEN", raising=False)
     app = create_app()
