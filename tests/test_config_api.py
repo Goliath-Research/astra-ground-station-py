@@ -274,7 +274,7 @@ def test_tree_packet_fields_sizes_and_stream(
         _cleanup(database_url, root_id, None)
 
 
-def test_deleting_a_vehicle_removes_its_children(
+def test_deleting_a_vehicle_leaves_its_children(
     client: TestClient,
     database_url: str,
 ) -> None:
@@ -289,12 +289,14 @@ def test_deleting_a_vehicle_removes_its_children(
             json={"name": "p6-stage", "parent_id": root_id, "icon_id": 2},
         )
         assert stage.status_code == 201
+        stage_id = stage.json()["id"]
         removed = client.delete(f"/api/tree/{root_id}")
         assert removed.status_code == 204
-        names = [row["name"] for row in client.get("/api/tree").json()]
-        assert "p6-vehicle" not in names
-        assert "p6-stage" not in names
-        root_id = None
+        rows = client.get("/api/tree").json()
+        assert "p6-vehicle" not in [row["name"] for row in rows]
+        remaining = next(row for row in rows if row["id"] == stage_id)
+        assert remaining["name"] == "p6-stage"
+        assert remaining["parent_id"] == root_id
     finally:
         _cleanup(database_url, root_id, None)
 
