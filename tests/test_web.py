@@ -7,6 +7,25 @@ from astra.web.__main__ import main
 from astra.web.settings import WebSettings
 
 
+def _function_body(script: str, name: str) -> str:
+    """Return one top-level function, including its braces."""
+    marker = f"function {name}("
+    start = script.find(marker)
+    assert start >= 0
+    open_brace = script.find("{", start)
+    assert open_brace >= 0
+    depth = 0
+    for index in range(open_brace, len(script)):
+        char = script[index]
+        if char == "{":
+            depth += 1
+        elif char == "}":
+            depth -= 1
+            if depth == 0:
+                return script[open_brace : index + 1]
+    raise AssertionError(name)
+
+
 def _paths(app: FastAPI) -> set[str]:
     """Collect route paths, including routers FastAPI keeps nested."""
     paths: set[str] = set()
@@ -70,6 +89,28 @@ def test_operator_page_lists_the_configurator_screens() -> None:
     assert "password_set" in script.text
     assert 'testAction(row.id, "start", "Start")' in script.text
     assert 'testAction(row.id, "stop", "Stop")' in script.text
+
+
+def test_sign_out_clears_editor_ids() -> None:
+    app = create_app()
+    with TestClient(app) as client:
+        script = client.get("/static/app.js")
+    assert script.status_code == 200
+    sign_out = _function_body(script.text, "signOut")
+    for snippet in (
+        "state.testId = null",
+        "state.logPacketId = null",
+        "clearPacketForm()",
+        "clearFieldForm()",
+        "clearDeviceForm()",
+        "clearServerForm()",
+        '$("test-name").value = ""',
+        '$("test-server").value = ""',
+    ):
+        assert snippet in sign_out
+    assert "state.fieldId = null" in _function_body(script.text, "clearFieldForm")
+    assert "state.deviceId = null" in _function_body(script.text, "clearDeviceForm")
+    assert "state.serverId = null" in _function_body(script.text, "clearServerForm")
 
 
 def test_api_is_closed_without_a_token(monkeypatch: pytest.MonkeyPatch) -> None:
