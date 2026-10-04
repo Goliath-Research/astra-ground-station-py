@@ -2,6 +2,8 @@
 
 Each vector keeps its id, layout, values, bit length, expected hex, and
 provenance. ``tests/data/codec_vectors.json`` is that transcription.
+``u8_out_of_range_wraps`` is the one vector whose expected hex is the
+legacy low-bit wrap. Default ``pack`` clips that input instead.
 """
 
 import json
@@ -80,6 +82,14 @@ def test_codec_vector(vector_id: str) -> None:
     values = _values(values_raw)
     assert encoded_bit_count(fields) == vector["bit_length"]
     payload = pack(fields, values)  # type: ignore[arg-type]
+    if vector_id == "u8_out_of_range_wraps":
+        # The transcribed hex is Delphi low-bit wrap (300 -> 2c). Default pack clips to 255.
+        assert payload.hex() == "ff"
+        assert unpack(fields, payload) == (255,)
+        wrapped = pack(fields, values, overflow="wrap")  # type: ignore[arg-type]
+        assert wrapped.hex() == vector["expected_hex"]
+        assert unpack(fields, wrapped) == (0x2C,)
+        return
     if "payload_hex" in vector:
         assert payload.hex() == vector["payload_hex"]
         assert device_t_ms(payload) == vector["device_t_ms"]
@@ -92,9 +102,6 @@ def test_codec_vector(vector_id: str) -> None:
         return
     restored = unpack(fields, payload)
     assert pack(fields, list(restored)) == payload
-    if vector_id == "u8_out_of_range_wraps":
-        assert restored == (0x2C,)
-        return
     assert restored == tuple(values)
 
 

@@ -13,7 +13,7 @@ build/
 .coverage
 htmlcov/
 
-# Local Mojo / pixi environments. The placeholder binary is a build product.
+# Local Mojo / pixi environments. The bitpack binary is a build product.
 .pixi/
 .magic/
 mojo/build/
