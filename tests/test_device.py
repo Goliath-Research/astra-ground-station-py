@@ -2,10 +2,11 @@
 
 import socket
 import struct
+import time
 
 import pytest
 
-from astra.cli.device import iter_datagrams, main, synthetic_datagram, timer_step_ms
+from astra.cli.device import _drain_replies, iter_datagrams, main, synthetic_datagram, timer_step_ms
 from astra.codec.framing import unpack_id_payload
 
 
@@ -68,3 +69,64 @@ def test_sends_two_datagrams_to_localhost() -> None:
     assert unpack_id_payload(first)[0] == 4
     assert struct.unpack_from("<i", unpack_id_payload(first)[1])[0] == 1
     assert struct.unpack_from("<i", unpack_id_payload(second)[1])[0] == 2
+
+
+def test_empty_reply_queue_does_not_wait() -> None:
+    with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as sock:
+        sock.bind(("127.0.0.1", 0))
+        started = time.monotonic()
+        _drain_replies(sock)
+        elapsed = time.monotonic() - started
+    assert elapsed < 0.05
+
+
+def test_queued_replies_are_drained(capsys: pytest.CaptureFixture[str]) -> None:
+    with (
+        socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as peer,
+        socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as sock,
+    ):
+        peer.bind(("127.0.0.1", 0))
+        sock.bind(("127.0.0.1", 0))
+        peer.sendto(b"aa", sock.getsockname())
+        peer.sendto(b"bbb", sock.getsockname())
+        started = time.monotonic()
+        _drain_replies(sock)
+        elapsed = time.monotonic() - started
+    captured = capsys.readouterr()
+    assert "recv 2 bytes" in captured.out
+    assert "recv 3 bytes" in captured.out
+    assert elapsed < 0.05
+
+
+def test_send_pace_is_not_stretched_by_a_reply_wait() -> None:
+    """31 sends at 1000 Hz are 30 ms of gaps. A 10 ms recv wait would be ~300 ms."""
+    count = 31
+    expected = (count - 1) * timer_step_ms(1000) / 1000
+    with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as server:
+        server.bind(("127.0.0.1", 0))
+        server.settimeout(2)
+        port = server.getsockname()[1]
+        assert isinstance(port, int)
+        started = time.monotonic()
+        code = main(
+            [
+                "--packet-id",
+                "4",
+                "--size",
+                "8",
+                "--rate",
+                "1000",
+                "--host",
+                "127.0.0.1",
+                "--port",
+                str(port),
+                "--count",
+                str(count),
+            ]
+        )
+        elapsed = time.monotonic() - started
+        for _ in range(count):
+            server.recvfrom(64)
+    assert code == 0
+    assert elapsed > expected * 0.5
+    assert elapsed < 0.15

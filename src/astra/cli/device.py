@@ -6,8 +6,10 @@ are ``t_ms``. ``t_ms`` starts at the timer interval and increases by that
 interval. The interval is ``round(1000 / rate)`` milliseconds, at least 1.
 The rest of the payload is zeros. Nothing here opens the database.
 
-``--count`` defaults to 1. ``--count 0`` sends until interrupted. Replies
-are printed as a byte count only.
+``--count`` defaults to 1. ``--count 0`` sends until interrupted. Sends are
+scheduled on a monotonic deadline so the pause is the time left in the
+step, not a full sleep after the work. Replies already queued are drained
+and printed as a byte count. A quiet peer does not add a wait.
 """
 
 from __future__ import annotations
@@ -89,37 +91,48 @@ def send_datagrams(
     *,
     pause: bool = True,
 ) -> int:
-    """Send the sequence and return how many datagrams went out."""
-    step = timer_step_ms(rate_hz)
-    sent = 0
+    """Send the sequence. Return 0, or 1 when a datagram cannot be sent.
+
+    The first datagram goes out immediately. Send ``n`` is due at
+    ``start + n * step``. Time spent printing or reading replies comes out
+    of that step instead of being added to it.
+    """
+    step_s = timer_step_ms(rate_hz) / 1000
     try:
         with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as sock:
-            for t_ms, datagram in iter_datagrams(packet_id, payload_size, rate_hz, count):
+            started = time.monotonic()
+            frames = enumerate(iter_datagrams(packet_id, payload_size, rate_hz, count))
+            for index, (t_ms, datagram) in frames:
+                if pause and index > 0:
+                    delay = started + index * step_s - time.monotonic()
+                    if delay > 0:
+                        time.sleep(delay)
                 try:
                     sock.sendto(datagram, (host, port))
                 except OSError:
                     print("could not send", file=sys.stderr)
                     return 1
-                sent += 1
                 print(f"sent packet_id={packet_id} t_ms={t_ms} size={payload_size}", flush=True)
-                _print_reply(sock)
-                if pause and (count == 0 or sent < count):
-                    time.sleep(step / 1000)
+                _drain_replies(sock)
     except KeyboardInterrupt:
         return 0
     return 0
 
 
-def _print_reply(sock: socket.socket) -> None:
-    try:
-        if not select.select([sock], [], [], 0)[0]:
+def _drain_replies(sock: socket.socket) -> None:
+    """Print every reply already queued. A zero timeout does not wait."""
+    while True:
+        try:
+            ready = select.select([sock], [], [], 0)[0]
+        except OSError:
             return
-        data = sock.recv(65535)
-    except TimeoutError:
-        return
-    except OSError:
-        return
-    print(f"recv {len(data)} bytes", flush=True)
+        if not ready:
+            return
+        try:
+            data = sock.recv(65535)
+        except (TimeoutError, OSError):
+            return
+        print(f"recv {len(data)} bytes", flush=True)
 
 
 def _host(value: str) -> str:
