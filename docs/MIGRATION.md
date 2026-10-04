@@ -39,7 +39,7 @@ TMoIP device ---> UDP 2357+stage ---> AstraTMoIP
 
 Three protocols show up in the sources. They are not interchangeable.
 
-1. **Vehicle UDP (R2L / L2R).** This is the ground link. An Indy `TIdUDPServer` receives datagrams and an `TIdUDPClient` sends them. A datagram is a little-endian 32-bit packet id plus a bit-packed payload (`AstraCommon/AstraNetPacket.pas`, `AstraCommon/AstraVarPacket.pas`). The design document calls the rocket-to-PC direction R2L and the PC-to-rocket direction L2R. There is no COM-port stack, no SLIP framing, and no UART tunnel in this repository. On the rocket, sensors sit on SPI and I2C; those buses stop at the vehicle. What arrives here is already a UDP datagram. `AstraTMoIP/src` has an IRIG 106 UART data type (`0x50`) only as an unused constant in the Chapter 10 library.
+1. **Vehicle UDP (R2L / L2R).** This is the ground link. An Indy `TIdUDPServer` receives datagrams and an `TIdUDPClient` sends them. A datagram is a little-endian 32-bit packet id plus a bit-packed payload (`AstraCommon/AstraNetPacket.pas`, `AstraCommon/AstraVarPacket.pas`). The design document calls the rocket-to-PC direction R2L and the PC-to-rocket direction L2R. There is no UART. The ground-station hardware talks Serial-over-UDP directly, with no serial gateway, no COM-port stack, and no SLIP framing between the vehicle and this software. On the rocket, sensors sit on SPI and I2C; those buses stop at the vehicle. What arrives here is already a UDP datagram. `AstraTMoIP/src` has an IRIG 106 UART data type (`0x50`) only as an unused constant in the Chapter 10 library. That constant is not a ground link and not a gateway (question 7, resolved Oct 4, 2026).
 
 2. **Telemetry over IP.** `AstraTMoIP/AstraDecoder.pas` listens on UDP port `2357 + stage` (stage 1 → 2358, stage 2 → 2359). Each datagram is one minor frame whose layout is the database packet named `IRIG106` on smart node `TMencoder` (fields `sf_id`, `row_id`, `packet_stream`). The decoder pulls Astra packets back out of `packet_stream` and forwards them to `127.0.0.1:2357`. It does **not** call the C library under `AstraTMoIP/src`.
 
@@ -99,7 +99,7 @@ These are harnesses for the queue, not ground-station features. Leave them behin
 
 44 C/C++/header files, 16,200 lines. Irig106.org IRIG 106 Chapter 10 (BSD-style license in the file headers; the notice forbids using the Irig106.org name to endorse a derived product). Includes Chapter 10 packet I/O (`irig106ch10.c`), TMATS, PCM, analog, time, 1553, UART, Ethernet, CAN, ARINC 429, video, and a network-stream mode (`I106_READ_NET_STREAM` in the matching Delphi translation).
 
-Nothing in any `.dpr` compiles or links these files. `AstraTMoIP/IRIG106.pas` (302 lines) and `IRIG106Ch10.pas` (230 lines) are unfinished Delphi translations of the Chapter 10 header. No unit `uses` them. `IRIG106.pas` only accepts data type Ethernet format 0 and then stops. The live decoder never consults a Chapter 10 sync word (`0xEB25`).
+Nothing in any `.dpr` compiles or links these files. `AstraTMoIP/IRIG106.pas` (302 lines) and `IRIG106Ch10.pas` (230 lines) are unfinished Delphi translations of the Chapter 10 header. No unit `uses` them. `IRIG106.pas` only accepts data type Ethernet format 0 and then stops. The live decoder never consults a Chapter 10 sync word (`0xEB25`). The UART format in that unused library is not a serial gateway; the hardware talks Serial-over-UDP directly (question 7).
 
 ## 2. Proposed replacement for each project
 
@@ -471,7 +471,7 @@ Open questions for David:
 4. **Resolved.** The bridge port is configuration (`ASTRA_BRIDGE_PORT`, environment variable or `/etc/astra/astra.env`). The legacy literal 2357 is the default, and it is the stored `servers.port`. The OPC DA ProgID on that row is `National Instruments.Variable Engine.1`, kept as a legacy reference; the published endpoint is `ASTRA_OPCUA_ENDPOINT`. See `docs/CODEC_DB_ANSWERS.md`.
 5. **Resolved.** The rocket started with two stages. Stage count is `ASTRA_STAGE_COUNT`, default 2, not the two constructors in `TAstraDecoder.Create`.
 6. **Resolved for tagged fields.** No L2R field has a `TransformationID`, so `TransformInput` has nothing to invert on the send path. The codec packs L2R values raw. See `docs/CODEC_DB_ANSWERS.md`.
-7. Is there a serial-over-UDP or UART gateway that lived outside this repo? Nothing here implements one. The ground link is the R2L/L2R datagram plus the TMoIP minor-frame port.
+7. **Resolved (Oct 4, 2026).** There is no UART. The ground-station hardware talks Serial-over-UDP directly, with no serial gateway in between. The ground link is the R2L/L2R datagram plus the TMoIP minor-frame port.
 8. **Resolved.** There are no captured `.DAT` files, pcaps, or exported test tables. Regression uses the Win64 oracle harness, property tests, the simulated vehicle, and captures taken from now on (§6).
 9. Should `FDroppedMinorFrames` and `FAvgFramesByRow` be corrected, or must old stats packets stay comparable?
 10. **Resolved.** `Jobs.PacketID` is the real key, together with `TestID`. `IntfID` is a generated UUID.
