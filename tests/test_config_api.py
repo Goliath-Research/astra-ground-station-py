@@ -503,6 +503,12 @@ def test_duplicate_copies_a_stage_and_a_packet(client: TestClient, database_url:
         )
         assert packet_node.status_code == 201
         node_id = packet_node.json()["id"]
+        empty = client.post(f"/api/tree/{node_id}/duplicate")
+        assert empty.status_code == 400
+        siblings = [
+            row for row in client.get("/api/tree").json() if row["parent_id"] == smart.json()["id"]
+        ]
+        assert [row["id"] for row in siblings] == [node_id]
         _ensure_u8(database_url, root_id)
         saved = client.put(
             f"/api/nodes/{node_id}/packet",

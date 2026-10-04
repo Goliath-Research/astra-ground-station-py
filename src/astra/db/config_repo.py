@@ -374,6 +374,8 @@ class ConfigRepo:
         parent_id = source["parent_id"]
         if not isinstance(parent_id, int):
             raise ConfigError("invalid")
+        if source["icon_id"] in (ICON_L2R, ICON_R2L) and self.packet(source_id) is None:
+            raise ConfigError("invalid")
         placeholder = self._one(
             """
             INSERT INTO treeversions (name, parentid, iconid)

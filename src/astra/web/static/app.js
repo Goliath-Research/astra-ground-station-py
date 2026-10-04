@@ -209,15 +209,24 @@ async function loadFields() {
     host.textContent = "Save a packet on the selected node before editing fields.";
     return;
   }
-  const fields = await api("/api/vartypes/" + state.packet.var_type_id + "/fields");
+  const types = await api("/api/scopes/" + state.selectedId + "/vartypes");
+  const records = types.filter((row) => row.scope_id === state.selectedId);
+  const fields = [];
+  for (const record of records) {
+    const rows = await api("/api/vartypes/" + record.id + "/fields");
+    for (const field of rows) {
+      fields.push(Object.assign({ record_name: record.name }, field));
+    }
+  }
   const table = document.createElement("table");
   const head = document.createElement("tr");
-  for (const label of ["Name", "Type", "Qty", "Seq", "Override", "Pin"]) {
+  for (const label of ["Record", "Name", "Type", "Qty", "Seq", "Override", "Pin"]) {
     addHeader(head, label);
   }
   table.appendChild(head);
   for (const field of fields) {
     const row = document.createElement("tr");
+    addCell(row, field.record_name);
     addCell(row, field.name);
     addCell(row, field.type_name + " (" + field.type_id + ")");
     addCell(row, field.qty);
