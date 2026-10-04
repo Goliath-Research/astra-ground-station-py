@@ -153,7 +153,7 @@ Do not port a `.dfm`. `AstraConfigurator/Main.dfm` and `AstraConfigurationManage
 | `AstraGenerator` | `python -m astra.cli.generate STAGE NODE INTERFACE FILE.csv`, with an argument count that matches the four parameters the body already tries to read |
 | `AstraTestManager` | Pages on the same web app: start/stop, job status, paged view of `{packet}_{test}`, CSV download. The hardcoded query `select * from AstraTestLog.dbo.L2R_1` in `qryIntfData` is a design-time leftover; the real screen must take the table name from the packet |
 | `AstraDevice` | `python -m astra.cli.device --packet-id --size --rate --host --port`. A bench tool, not a service |
-| `AstraConfigurationManager` + `dclDataModel` | No direct port of EntityDAC or the design-time package. The v3 hardware editor is a separate decision (§7). If it is still wanted, it is a handful of CRUD screens. The schema in `database/` is the Configurator schema, not those EntityDAC tables |
+| `AstraConfigurationManager` + `dclDataModel` | Not ported. The EntityDAC tables are framework metadata and are not in the migrated schema (question 2, Oct 4, 2026). The schema in `database/` is the Configurator schema |
 | `TaskManager/QueueTest*`, `L2R_*`, `R2L_*`, `R2L2R` | Do not port. Their behavior is already inside `AstraCommon` |
 | `AstraTMoIP/src`, `IRIG106.pas`, `IRIG106Ch10.pas` | Do not rewrite. Keep the C tree in place for a later `cffi` build. Delete nothing in this planning step. The Delphi stubs are unused |
 
@@ -224,6 +224,10 @@ Do not put sockets, `asyncua`, or `psycopg` in Mojo.
 No stored procedures, no views, no indexes beyond the primary and foreign keys, no seed data. The script is not runnable top to bottom: `StarDevices` is created before `Stars` and `Devices`, which it references. `Database Initialization.sql` inserts into `VarTypes.ValListID` and `AstraClasses`, columns and tables this script does not define.
 
 `DataModel.Mapping.xml` is a later EntityDAC model and does not match that script. Its tables include `AstraMetas`, `AstraObjs`, `AstraClasses`, `AstraVars`, `BoardVars`, `BoardObjVars`, `ProcBlocks`, `ProcBlockVars`, `ValLists`, `ValListValues`, `VarMappings`, `StackBoards`, `StarStacks`, `DeviceStars`, `VarUses`. Inheritance is class-table (`Devices.ID` → `AstraMetas.ID`), with `IDENTITY` on `AstraMetas` and `AstraObjs`. `Boards` has `IsMaster bit` and `MainID`. `VarTypes` has `ValListID`. None of this is what the bridge queries.
+
+Checked Oct 4, 2026 (question 2). David's rule was to use these hardware tables for tests if they describe the actual boards. They do not. `database/schema/01_schema.sql` is the AstraConfig backup: 37 `config` tables, and none of them is `Boards`, `Stacks`, `Stars`, `Sensors`, `Actuators`, `AstraMetas`, `AstraObjs`, `AstraClasses`, `AstraVars`, `BoardVars`, `BoardObjs`, `BoardObjVars`, `ProcBlocks`, `ProcBlockVars`, `BoardProcBlocks`, `StackBoards`, `StarStacks`, `DeviceStars`, `ValLists`, `ValListValues`, `VarMappings`, or `VarUses`. `docs/CODEC_DB_ANSWERS.md` loaded `02_data.sql` into that schema and records no rows for those names. `DataModel.sql` has no seed data. The generated columns (`Boards.IsMaster`, `Boards.MainID`, `Stacks.MasterID`, `ProcBlocks.Frequency`, `BoardVars.BoardID`) are class metadata, not a pinout of boards, pins, connectors, or areas. Nothing from that model was ported. Do not copy `02_data.sql` into a fixture: it holds `Servers.Password`.
+
+The Access pinout tables already in `config` (`areas`, `area_list`, `board`, `links`, `stage`, `names`) are a different model, not EntityDAC. The answers file names three harness stages (`S1Tester1`, `S2Tester1`, `S1EngineTester1`) and does not publish their board or pin rows, so those rows were not turned into fixtures either.
 
 The running schema is the one FireDAC uses, and it is **not** either of those files. Both databases were in the SQL Server backups: `AstraConfig.bak` (2017-07-05) and `AstraTestLog.bak` (2017-04-12). The verified scripts are under `database/`:
 
@@ -412,7 +416,7 @@ CSV from `ExportDataSetToCSV` uses `;` and quotes. Booleans are `0`/`1`. Lines e
 
 Deliberate deviations:
 
-- Hardware icons 8–10, areas, boards, connectors, and print hardware were deferred here. Phase 8 is that configurator editor. Question 2 leaves the EntityDAC tables out.
+- Hardware icons 8–10, areas, boards, connectors, and print hardware were deferred here. Phase 8 is that configurator editor. Question 2: the EntityDAC tables are not in the migrated schema, so they stay out.
 - The LabVIEW export is the OPC UA node list the bridge publishes (`Astra{PacketName}/{field}`), not the NI shared-variable CSV. Question 12 is still open.
 - DevExpress HTML, XML, XLS, and XLSX grid exports are not ported. A browser print of the mappings table is the wiring list.
 - There is no Win64 CSV golden in git, and no restored production database. The Simulink and mapping writers are checked against the `ExportDataSetToCSV` rules on a synthetic node, not against a file the Win64 configurator produced.
@@ -430,7 +434,7 @@ Done for everything that does not need a vehicle. `python -m astra.cli.device` s
 
 Done. The operator app creates the configurator hardware tree: icon 8 under a smart node (one root; `spgethardwarenode` reads a single child), icon 9 areas under that root, and icon 10 boards under an area. A board holds pins (`connections`: first pin, optional link type, connector, sequence, description, and short name). Areas and boards duplicate through `spduplicate`, which copies a board's pins. The hardware root does not move or duplicate. Print is the browser print of that wiring list.
 
-The scripts in `database/` are the Configurator schema. They do not contain the EntityDAC v3 tables, and those tables stay out (question 2). Do not port `AstraConfigurationManager`.
+The scripts in `database/` are the Configurator schema. Checked Oct 4, 2026: the EntityDAC v3 tables are not in that schema and have no rows in the migrated data, so they were not ported (question 2). Do not port `AstraConfigurationManager`.
 
 Deliberate deviations:
 
@@ -466,7 +470,7 @@ Risks that are visible from this tree:
 Open questions for David:
 
 1. **Resolved.** Both `AstraConfig` and `AstraTestLog` were in the backups. Schema and programmability scripts are in `database/`. The `02_data.sql` scripts and the `.bak` files stay outside git.
-2. **Default, pending override.** The EntityDAC v3 tables (`DataModel.Mapping.xml`, boards / stacks / stars / proc blocks) stay out of this port. Hardware editing uses the Configurator tree: `TreeVersions` icons 8–10, areas, boards, and connectors. David can override if a vehicle was actually built from the EntityDAC model.
+2. **Resolved (Oct 4, 2026).** No EntityDAC v3 table describes the actual boards. They are absent from `database/schema` and from the `02_data.sql` load in `docs/CODEC_DB_ANSWERS.md`. The model is empty framework metadata (boards, stacks, stars, proc blocks), not a pinout. Hardware tests stay on the configurator tree (icons 8–10, `connections`, `connectors`). Nothing was ported. See §4.
 3. **Resolved.** LabVIEW will move from NI shared variables to OPC UA tags published by the bridge.
 4. **Resolved.** The bridge port is configuration (`ASTRA_BRIDGE_PORT`, environment variable or `/etc/astra/astra.env`). The legacy literal 2357 is the default, and it is the stored `servers.port`. The OPC DA ProgID on that row is `National Instruments.Variable Engine.1`, kept as a legacy reference; the published endpoint is `ASTRA_OPCUA_ENDPOINT`. See `docs/CODEC_DB_ANSWERS.md`.
 5. **Resolved.** The rocket started with two stages. Stage count is `ASTRA_STAGE_COUNT`, default 2, not the two constructors in `TAstraDecoder.Create`.
@@ -477,6 +481,6 @@ Open questions for David:
 10. **Resolved.** `Jobs.PacketID` is the real key, together with `TestID`. `IntfID` is a generated UUID.
 11. **Resolved.** Production was built for x64 (Win64). Golden numeric values, including transformation 1, follow Win64 `float64` behavior.
 12. Who owns the LabVIEW change that retargets the VIs to the bridge’s OPC UA tags, and does the client still need the NI shared-variable CSV during the cutover? The destination itself is settled (question 3).
-13. **Default, pending override.** Yes. `AstraConfigurationManager` and the EntityDAC tables stay out. The configurator hardware tree is the editor (question 2). David can override.
+13. **Resolved (Oct 4, 2026).** `AstraConfigurationManager` and the EntityDAC tables stay out. The migrated database has no rows for that model (question 2). The editor is the configurator hardware tree.
 14. **Resolved.** The services run on Linux, probably Ubuntu, on x86_64 and possibly ARM64. LabVIEW is an OPC UA client of the bridge. Wheel, Mojo SDK, endianness, and CI consequences are in §5.
 15. **Compiler pin resolved.** Local builds and CI use `modular/max-nvidia-base:26.6.0` (manifest list `sha256:53a1f0b502e67f400b0bc3c4575fde73f84d468ea03b977eaad2ef6fcd303c31`), which ships Mojo 1.1.0 for linux/amd64 and linux/arm64. Still open: does the community license cover deploying a Mojo packer inside the service at the client site? The Python service runs without Mojo until that is confirmed.
