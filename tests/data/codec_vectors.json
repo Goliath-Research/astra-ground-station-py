@@ -1,0 +1,692 @@
+{
+  "note": "Transcribed from astra-ground-station docs/codec_vectors.json (PR #6).",
+  "vectors": [
+    {
+      "id": "bool_false",
+      "layout": "a:bool(1)/1",
+      "fields": [
+        {
+          "name": "a",
+          "type": "bool",
+          "type_id": 1,
+          "bits": 1
+        }
+      ],
+      "values": [
+        false
+      ],
+      "bit_length": 1,
+      "expected_hex": "00",
+      "provenance": "AstraCommon/AstraVarPacket.pas TVehicleDataType.SaveValue (487-640) via TBitStream.SaveBit (301-319) and TAstraVarPacket.SavePacket (1042-1092)"
+    },
+    {
+      "id": "bool_true",
+      "layout": "a:bool(1)/1",
+      "fields": [
+        {
+          "name": "a",
+          "type": "bool",
+          "type_id": 1,
+          "bits": 1
+        }
+      ],
+      "values": [
+        true
+      ],
+      "bit_length": 1,
+      "expected_hex": "01",
+      "provenance": "AstraCommon/AstraVarPacket.pas TVehicleDataType.SaveValue (487-640) via TBitStream.SaveBit (301-319) and TAstraVarPacket.SavePacket (1042-1092)"
+    },
+    {
+      "id": "u8",
+      "layout": "a:u8(2)/8",
+      "fields": [
+        {
+          "name": "a",
+          "type": "u8",
+          "type_id": 2,
+          "bits": 8
+        }
+      ],
+      "values": [
+        165
+      ],
+      "bit_length": 8,
+      "expected_hex": "a5",
+      "provenance": "AstraCommon/AstraVarPacket.pas TVehicleDataType.SaveValue (487-640) via TBitStream.SaveBit (301-319) and TAstraVarPacket.SavePacket (1042-1092)"
+    },
+    {
+      "id": "u12",
+      "layout": "a:u12(3)/12",
+      "fields": [
+        {
+          "name": "a",
+          "type": "u12",
+          "type_id": 3,
+          "bits": 12
+        }
+      ],
+      "values": [
+        2748
+      ],
+      "bit_length": 12,
+      "expected_hex": "bc0a",
+      "provenance": "AstraCommon/AstraVarPacket.pas TVehicleDataType.SaveValue (487-640) via TBitStream.SaveBit (301-319) and TAstraVarPacket.SavePacket (1042-1092)"
+    },
+    {
+      "id": "u16",
+      "layout": "a:u16(4)/16",
+      "fields": [
+        {
+          "name": "a",
+          "type": "u16",
+          "type_id": 4,
+          "bits": 16
+        }
+      ],
+      "values": [
+        4660
+      ],
+      "bit_length": 16,
+      "expected_hex": "3412",
+      "provenance": "AstraCommon/AstraVarPacket.pas TVehicleDataType.SaveValue (487-640) via TBitStream.SaveBit (301-319) and TAstraVarPacket.SavePacket (1042-1092)"
+    },
+    {
+      "id": "u32",
+      "layout": "a:u32(5)/32",
+      "fields": [
+        {
+          "name": "a",
+          "type": "u32",
+          "type_id": 5,
+          "bits": 32
+        }
+      ],
+      "values": [
+        2309737967
+      ],
+      "bit_length": 32,
+      "expected_hex": "efcdab89",
+      "provenance": "AstraCommon/AstraVarPacket.pas TVehicleDataType.SaveValue (487-640) via TBitStream.SaveBit (301-319) and TAstraVarPacket.SavePacket (1042-1092)"
+    },
+    {
+      "id": "i8",
+      "layout": "a:i8(6)/8",
+      "fields": [
+        {
+          "name": "a",
+          "type": "i8",
+          "type_id": 6,
+          "bits": 8
+        }
+      ],
+      "values": [
+        -2
+      ],
+      "bit_length": 8,
+      "expected_hex": "fe",
+      "provenance": "AstraCommon/AstraVarPacket.pas TVehicleDataType.SaveValue (487-640) via TBitStream.SaveBit (301-319) and TAstraVarPacket.SavePacket (1042-1092)"
+    },
+    {
+      "id": "i16",
+      "layout": "a:i16(7)/16",
+      "fields": [
+        {
+          "name": "a",
+          "type": "i16",
+          "type_id": 7,
+          "bits": 16
+        }
+      ],
+      "values": [
+        -2
+      ],
+      "bit_length": 16,
+      "expected_hex": "feff",
+      "provenance": "AstraCommon/AstraVarPacket.pas TVehicleDataType.SaveValue (487-640) via TBitStream.SaveBit (301-319) and TAstraVarPacket.SavePacket (1042-1092)"
+    },
+    {
+      "id": "i32",
+      "layout": "a:i32(8)/32",
+      "fields": [
+        {
+          "name": "a",
+          "type": "i32",
+          "type_id": 8,
+          "bits": 32
+        }
+      ],
+      "values": [
+        -2
+      ],
+      "bit_length": 32,
+      "expected_hex": "feffffff",
+      "provenance": "AstraCommon/AstraVarPacket.pas TVehicleDataType.SaveValue (487-640) via TBitStream.SaveBit (301-319) and TAstraVarPacket.SavePacket (1042-1092)"
+    },
+    {
+      "id": "f32",
+      "layout": "a:f32(9)/32",
+      "fields": [
+        {
+          "name": "a",
+          "type": "f32",
+          "type_id": 9,
+          "bits": 32
+        }
+      ],
+      "values": [
+        1.0
+      ],
+      "bit_length": 32,
+      "expected_hex": "0000803f",
+      "provenance": "AstraCommon/AstraVarPacket.pas TVehicleDataType.SaveValue (487-640) via TBitStream.SaveBit (301-319) and TAstraVarPacket.SavePacket (1042-1092)"
+    },
+    {
+      "id": "f64",
+      "layout": "a:f64(10)/64",
+      "fields": [
+        {
+          "name": "a",
+          "type": "f64",
+          "type_id": 10,
+          "bits": 64
+        }
+      ],
+      "values": [
+        -1.5
+      ],
+      "bit_length": 64,
+      "expected_hex": "000000000000f8bf",
+      "provenance": "AstraCommon/AstraVarPacket.pas TVehicleDataType.SaveValue (487-640) via TBitStream.SaveBit (301-319) and TAstraVarPacket.SavePacket (1042-1092)"
+    },
+    {
+      "id": "i32q8_raw",
+      "layout": "a:i32q8(11)/32",
+      "fields": [
+        {
+          "name": "a",
+          "type": "i32q8",
+          "type_id": 11,
+          "bits": 32
+        }
+      ],
+      "values": [
+        256
+      ],
+      "bit_length": 32,
+      "expected_hex": "00010000",
+      "provenance": "AstraCommon/AstraVarPacket.pas TVehicleDataType.SaveValue (487-640) via TBitStream.SaveBit (301-319) and TAstraVarPacket.SavePacket (1042-1092)"
+    },
+    {
+      "id": "i32q16_raw",
+      "layout": "a:i32q16(12)/32",
+      "fields": [
+        {
+          "name": "a",
+          "type": "i32q16",
+          "type_id": 12,
+          "bits": 32
+        }
+      ],
+      "values": [
+        -1000
+      ],
+      "bit_length": 32,
+      "expected_hex": "18fcffff",
+      "provenance": "AstraCommon/AstraVarPacket.pas TVehicleDataType.SaveValue (487-640) via TBitStream.SaveBit (301-319) and TAstraVarPacket.SavePacket (1042-1092)"
+    },
+    {
+      "id": "u8q8_raw",
+      "layout": "a:u8q8(13)/8",
+      "fields": [
+        {
+          "name": "a",
+          "type": "u8q8",
+          "type_id": 13,
+          "bits": 8
+        }
+      ],
+      "values": [
+        60
+      ],
+      "bit_length": 8,
+      "expected_hex": "3c",
+      "provenance": "AstraCommon/AstraVarPacket.pas TVehicleDataType.SaveValue (487-640) via TBitStream.SaveBit (301-319) and TAstraVarPacket.SavePacket (1042-1092)"
+    },
+    {
+      "id": "u16q16_raw",
+      "layout": "a:u16q16(14)/16",
+      "fields": [
+        {
+          "name": "a",
+          "type": "u16q16",
+          "type_id": 14,
+          "bits": 16
+        }
+      ],
+      "values": [
+        256
+      ],
+      "bit_length": 16,
+      "expected_hex": "0001",
+      "provenance": "AstraCommon/AstraVarPacket.pas TVehicleDataType.SaveValue (487-640) via TBitStream.SaveBit (301-319) and TAstraVarPacket.SavePacket (1042-1092)"
+    },
+    {
+      "id": "u12_after_bool",
+      "layout": "flag:bool(1)/1, n:u12(3)/12",
+      "fields": [
+        {
+          "name": "flag",
+          "type": "bool",
+          "type_id": 1,
+          "bits": 1
+        },
+        {
+          "name": "n",
+          "type": "u12",
+          "type_id": 3,
+          "bits": 12
+        }
+      ],
+      "values": [
+        true,
+        2748
+      ],
+      "bit_length": 13,
+      "expected_hex": "7915",
+      "provenance": "AstraCommon/AstraVarPacket.pas TVehicleDataType.SaveValue (487-640) via TBitStream.SaveBit (301-319) and TAstraVarPacket.SavePacket (1042-1092)"
+    },
+    {
+      "id": "u16_after_four_bools",
+      "layout": "b0,b1,b2,b3:bool(1)/1, n:u16(4)/16",
+      "fields": [
+        {
+          "name": "b0",
+          "type": "bool",
+          "type_id": 1,
+          "bits": 1
+        },
+        {
+          "name": "b1",
+          "type": "bool",
+          "type_id": 1,
+          "bits": 1
+        },
+        {
+          "name": "b2",
+          "type": "bool",
+          "type_id": 1,
+          "bits": 1
+        },
+        {
+          "name": "b3",
+          "type": "bool",
+          "type_id": 1,
+          "bits": 1
+        },
+        {
+          "name": "n",
+          "type": "u16",
+          "type_id": 4,
+          "bits": 16
+        }
+      ],
+      "values": [
+        true,
+        false,
+        true,
+        true,
+        255
+      ],
+      "bit_length": 20,
+      "expected_hex": "fd0f00",
+      "provenance": "AstraCommon/AstraVarPacket.pas TVehicleDataType.SaveValue (487-640) via TBitStream.SaveBit (301-319) and TAstraVarPacket.SavePacket (1042-1092)"
+    },
+    {
+      "id": "override_after_record",
+      "layout": "a:u8(2)/8 [ovr], b:u12(3)/12",
+      "fields": [
+        {
+          "name": "a",
+          "type": "u8",
+          "type_id": 2,
+          "bits": 8,
+          "override": true
+        },
+        {
+          "name": "b",
+          "type": "u12",
+          "type_id": 3,
+          "bits": 12
+        }
+      ],
+      "values": [
+        17,
+        1,
+        true
+      ],
+      "bit_length": 21,
+      "expected_hex": "110110",
+      "provenance": "AstraCommon/AstraVarPacket.pas TVehicleDataType.SaveValue (487-640) via TBitStream.SaveBit (301-319) and TAstraVarPacket.SavePacket (1042-1092); LoadFieldOvrs 792-822 appends ovr_ bits after the field list"
+    },
+    {
+      "id": "override_two_fields",
+      "layout": "a:u8/8 [ovr], b:u8/8 [ovr]",
+      "fields": [
+        {
+          "name": "a",
+          "type": "u8",
+          "type_id": 2,
+          "bits": 8,
+          "override": true
+        },
+        {
+          "name": "b",
+          "type": "u8",
+          "type_id": 2,
+          "bits": 8,
+          "override": true
+        }
+      ],
+      "values": [
+        1,
+        2,
+        false,
+        true
+      ],
+      "bit_length": 18,
+      "expected_hex": "010202",
+      "provenance": "AstraCommon/AstraVarPacket.pas TVehicleDataType.SaveValue (487-640) via TBitStream.SaveBit (301-319) and TAstraVarPacket.SavePacket (1042-1092); LoadFieldOvrs 792-822 appends ovr_ bits after the field list"
+    },
+    {
+      "id": "array_u8",
+      "layout": "a:u8(2)/8 x3",
+      "fields": [
+        {
+          "name": "a",
+          "type": "u8",
+          "type_id": 2,
+          "bits": 8,
+          "qty": 3
+        }
+      ],
+      "values": [
+        17,
+        34,
+        51
+      ],
+      "bit_length": 24,
+      "expected_hex": "112233",
+      "provenance": "AstraCommon/AstraVarPacket.pas TVehicleDataType.SaveValue (487-640) via TBitStream.SaveBit (301-319) and TAstraVarPacket.SavePacket (1042-1092); SavePacket loops Qty 1062-1066"
+    },
+    {
+      "id": "array_u12_with_one_override",
+      "layout": "a:u12(3)/12 x2 [ovr]",
+      "fields": [
+        {
+          "name": "a",
+          "type": "u12",
+          "type_id": 3,
+          "bits": 12,
+          "qty": 2,
+          "override": true
+        }
+      ],
+      "values": [
+        1,
+        4095,
+        true
+      ],
+      "bit_length": 25,
+      "expected_hex": "01f0ff01",
+      "provenance": "AstraCommon/AstraVarPacket.pas TVehicleDataType.SaveValue (487-640) via TBitStream.SaveBit (301-319) and TAstraVarPacket.SavePacket (1042-1092); LoadFieldOvrs 792-822 appends ovr_ bits after the field list; SavePacket loops Qty 1062-1066"
+    },
+    {
+      "id": "nested_record",
+      "layout": "R_a:u8/8, R_b:bool/1, c:u8/8",
+      "source_tree": "R(type_id>100){a:u8,b:bool}, c:u8",
+      "fields": [
+        {
+          "name": "R",
+          "type_id": 101,
+          "fields": [
+            {
+              "name": "a",
+              "type": "u8",
+              "type_id": 2,
+              "bits": 8
+            },
+            {
+              "name": "b",
+              "type": "bool",
+              "type_id": 1,
+              "bits": 1
+            }
+          ]
+        },
+        {
+          "name": "c",
+          "type": "u8",
+          "type_id": 2,
+          "bits": 8
+        }
+      ],
+      "values": [
+        126,
+        true,
+        129
+      ],
+      "bit_length": 17,
+      "expected_hex": "7e0301",
+      "provenance": "AstraCommon/AstraVarPacket.pas TVehicleDataType.SaveValue (487-640) via TBitStream.SaveBit (301-319) and TAstraVarPacket.SavePacket (1042-1092); LoadFields 703-790 flattens TypeID>100, no pad bits"
+    },
+    {
+      "id": "array_of_records",
+      "layout": "R_0_a:u8/8, R_0_b:bool/1, R_1_a:u8/8, R_1_b:bool/1",
+      "source_tree": "R(type_id>100, qty 2){a:u8,b:bool}",
+      "fields": [
+        {
+          "name": "R",
+          "type_id": 101,
+          "fields": [
+            {
+              "name": "a",
+              "type": "u8",
+              "type_id": 2,
+              "bits": 8
+            },
+            {
+              "name": "b",
+              "type": "bool",
+              "type_id": 1,
+              "bits": 1
+            }
+          ],
+          "qty": 2
+        }
+      ],
+      "values": [
+        1,
+        false,
+        2,
+        true
+      ],
+      "bit_length": 18,
+      "expected_hex": "010402",
+      "provenance": "AstraCommon/AstraVarPacket.pas TVehicleDataType.SaveValue (487-640) via TBitStream.SaveBit (301-319) and TAstraVarPacket.SavePacket (1042-1092); LoadFields array-of-record expansion 781-783"
+    },
+    {
+      "id": "null_becomes_zero",
+      "layout": "a:u16(4)/16, b:bool(1)/1",
+      "fields": [
+        {
+          "name": "a",
+          "type": "u16",
+          "type_id": 4,
+          "bits": 16
+        },
+        {
+          "name": "b",
+          "type": "bool",
+          "type_id": 1,
+          "bits": 1
+        }
+      ],
+      "values": [
+        null,
+        null
+      ],
+      "bit_length": 17,
+      "expected_hex": "000000",
+      "provenance": "AstraCommon/AstraVarPacket.pas TVehicleDataType.SaveValue (487-640) via TBitStream.SaveBit (301-319) and TAstraVarPacket.SavePacket (1042-1092); IsValidValue 185-188"
+    },
+    {
+      "id": "u8_out_of_range_wraps",
+      "layout": "a:u8/8",
+      "fields": [
+        {
+          "name": "a",
+          "type": "u8",
+          "type_id": 2,
+          "bits": 8
+        }
+      ],
+      "values": [
+        300
+      ],
+      "bit_length": 8,
+      "expected_hex": "2c",
+      "provenance": "AstraCommon/AstraVarPacket.pas TVehicleDataType.SaveValue (487-640) via TBitStream.SaveBit (301-319) and TAstraVarPacket.SavePacket (1042-1092); no {$R+}; low bits of destination width"
+    },
+    {
+      "id": "f32_nan",
+      "layout": "a:f32(9)/32",
+      "fields": [
+        {
+          "name": "a",
+          "type": "f32",
+          "type_id": 9,
+          "bits": 32
+        }
+      ],
+      "values": [
+        {
+          "nan_bits": "7fc00000",
+          "width": 32
+        }
+      ],
+      "bit_length": 32,
+      "expected_hex": "0000c07f",
+      "provenance": "AstraCommon/AstraVarPacket.pas TVehicleDataType.SaveValue (487-640) via TBitStream.SaveBit (301-319) and TAstraVarPacket.SavePacket (1042-1092)"
+    },
+    {
+      "id": "udp_frame",
+      "layout": "packet_id=7; t_ms:i32(8)/32, flag:bool/1, n:u8/8",
+      "fields": [
+        {
+          "name": "t_ms",
+          "type": "i32",
+          "type_id": 8,
+          "bits": 32
+        },
+        {
+          "name": "flag",
+          "type": "bool",
+          "type_id": 1,
+          "bits": 1
+        },
+        {
+          "name": "n",
+          "type": "u8",
+          "type_id": 2,
+          "bits": 8
+        }
+      ],
+      "values": [
+        1000,
+        true,
+        90
+      ],
+      "bit_length": 41,
+      "payload_hex": "e8030000b500",
+      "device_t_ms": 1000,
+      "packet_id": 7,
+      "expected_hex": "07000000e8030000b500",
+      "provenance": "AstraCommon/AstraNetPacket.pas GetIdPayload (64-70); payload from TAstraVarPacket.SavePacket (1042-1092); GetDeviceT_MS (110-117)"
+    },
+    {
+      "id": "minor_frame_1_of_2",
+      "layout": "sf_id:u8/8, row_id:i32/32, packet_stream:u8/8 x4",
+      "fields": [
+        {
+          "name": "sf_id",
+          "type": "u8",
+          "type_id": 2,
+          "bits": 8
+        },
+        {
+          "name": "row_id",
+          "type": "i32",
+          "type_id": 8,
+          "bits": 32
+        },
+        {
+          "name": "packet_stream",
+          "type": "u8",
+          "type_id": 2,
+          "bits": 8,
+          "qty": 4
+        }
+      ],
+      "values": [
+        1,
+        1,
+        4,
+        3,
+        2,
+        1
+      ],
+      "bit_length": 72,
+      "expected_hex": "010100000004030201",
+      "provenance": "AstraTMEncoder/_AstraTMEncoder.pas BuildPacketStream (168-210) and Timer1Timer (212-276); widths are a fixture",
+      "notes": "irig_rate 200, sequence 0, included packet id 16909060 (0x01020304), enc size 4, PacketStream 04030201 00000000; this frame copies the id bytes"
+    },
+    {
+      "id": "minor_frame_2_of_2",
+      "layout": "sf_id:u8/8, row_id:i32/32, packet_stream:u8/8 x4",
+      "fields": [
+        {
+          "name": "sf_id",
+          "type": "u8",
+          "type_id": 2,
+          "bits": 8
+        },
+        {
+          "name": "row_id",
+          "type": "i32",
+          "type_id": 8,
+          "bits": 32
+        },
+        {
+          "name": "packet_stream",
+          "type": "u8",
+          "type_id": 2,
+          "bits": 8,
+          "qty": 4
+        }
+      ],
+      "values": [
+        2,
+        1,
+        0,
+        0,
+        0,
+        0
+      ],
+      "bit_length": 72,
+      "expected_hex": "020100000000000000",
+      "provenance": "AstraTMEncoder/_AstraTMEncoder.pas BuildPacketStream (168-210) and Timer1Timer (212-276); widths are a fixture",
+      "notes": "PacketStream still has the EncSize zero bytes, so only SubFrameID increments; Sequence and row_id stay put"
+    }
+  ]
+}
