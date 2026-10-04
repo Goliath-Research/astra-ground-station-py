@@ -1,9 +1,8 @@
-"""Golden payloads for the packer.
+"""Hand-checked payloads for the packer.
 
-``CODEC_SPEC.md`` and ``codec_vectors.json`` from astra-ground-station PR #6
-were not on disk, so the 29 source-verified vectors were not loaded and
-these tests do not cite Delphi line numbers. The expected bytes follow the
-rules that spec was described as stating, named by unit and routine:
+The 29 source vectors live in ``tests/data/codec_vectors.json`` and
+``tests/test_codec_vectors.py``. Line citations are the ones transcribed
+into ``docs/CODEC_SPEC.md`` from astra-ground-station PR #6.
 
 - ``AstraVarPacket.pas`` ``TBitStream.SaveBit`` / ``SavePacket``: zero the
   buffer, then concatenate fields with no padding. LSB first within a byte,
@@ -13,10 +12,9 @@ rules that spec was described as stating, named by unit and routine:
   bits (300 as ``u8`` is ``2c``). Null becomes 0. Q types are the raw
   integer (``i32q8`` 256 stays 256). ``f32`` / ``f64`` are IEEE-754,
   including NaN.
-- ``AstraVarPacket.pas`` ``LoadFieldOvrs``: one ``ovr_`` bool per field,
-  appended after the whole flattened record. An array gets one override
-  bit, not one per element. Nested records (type id > 100) flatten in
-  field order; each element's own override bits stay with that element.
+- ``AstraVarPacket.pas`` ``LoadFieldOvrs`` (792-822): one ``ovr_<leaf>``
+  bit at the end of the whole flattened field list. An array leaf gets one
+  bit. ``Override`` on a record row is not emitted.
 - ``AstraNetPacket.pas`` ``GetIdPayload`` and ``GetDeviceT_MS``: a datagram
   is a signed int32 little-endian packet id plus the payload. ``t_ms`` is
   the first four payload bytes. No checksum.
@@ -194,34 +192,32 @@ def test_nested_record_is_packed_inline_without_a_byte_pad() -> None:
     assert names == ["rec_a", "rec_flag", "c"]
 
 
-def test_array_of_nested_records_keeps_each_elements_override() -> None:
-    # qty does not byte-align elements. Each element ends with its own ovr bit.
+def test_array_of_records_puts_override_bits_at_the_very_end() -> None:
+    # LoadFieldOvrs appends ovr_ after the whole flattened list. Copies of a
+    # record are leaves rec_0_x, rec_1_x; their override bits are not stored
+    # inside each element. A following sibling stays before those bits.
     nested = Field("rec", 200, qty=2, fields=(Field("x", 2, override=True),))
-    assert [item.name for item in flatten((nested,))] == [
+    fields = (nested, Field("c", 2))
+    assert [item.name for item in flatten(fields)] == [
         "rec_0_x",
-        "ovr_rec_0_x",
         "rec_1_x",
+        "c",
+        "ovr_rec_0_x",
         "ovr_rec_1_x",
     ]
-    payload = pack((nested,), [0x01, False, 0x02, True])
-    assert payload == bytes.fromhex("010402")
-    assert unpack((nested,), payload) == (0x01, False, 0x02, True)
+    payload = pack(fields, [0x01, 0x02, 0x03, False, True])
+    assert payload == bytes.fromhex("01020302")
+    assert unpack(fields, payload) == (0x01, 0x02, 0x03, False, True)
 
 
-def test_nested_array_has_one_override_bit() -> None:
+def test_override_on_a_record_row_is_not_emitted() -> None:
     nested = Field("rec", 200, qty=2, override=True, fields=(Field("x", 2),))
-    assert [item.name for item in flatten((nested,))] == ["rec_0_x", "rec_1_x", "ovr_rec"]
-    assert pack((nested,), [0x11, 0x22, True]) == bytes.fromhex("112201")
+    assert [item.name for item in flatten((nested,))] == ["rec_0_x", "rec_1_x"]
+    assert pack((nested,), [0x11, 0x22]) == bytes.fromhex("1122")
 
 
-def test_nested_override_stays_inside_the_child() -> None:
-    # Child LoadFieldOvrs runs before the parent continues. x = 0,
-    # ovr = 1, then the parent has no further fields. 8 zero bits + 1.
-    nested = Field(
-        "rec",
-        200,
-        fields=(Field("x", 2, override=True),),
-    )
+def test_nested_leaf_override_is_one_bit_after_the_packet() -> None:
+    nested = Field("rec", 200, fields=(Field("x", 2, override=True),))
     payload = pack((nested,), [0x00, True])
     assert payload == bytes.fromhex("0001")
     assert [item.name for item in flatten((nested,))] == ["rec_x", "ovr_rec_x"]

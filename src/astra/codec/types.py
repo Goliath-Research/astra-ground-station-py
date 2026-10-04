@@ -1,15 +1,15 @@
 """Vehicle data types and the flat layout a later Mojo packer would take.
 
-Type ids and bit widths are ``TVehicleDataTypes`` in ``AstraVarPacket.pas``.
-Override bits are one bool each, appended after the whole flattened record.
-An array field contributes one override bit, not one per element. A nested
-record (type id > 100) is flattened in field order, and each element's own
-override bits stay at the end of that element. Arrays are packed back to
-back. Nested records and arrays are not padded to a byte boundary.
+Type ids and bit widths are ``TVehicleDataTypes`` in
+``AstraCommon/AstraVarPacket.pas``. ``LoadFields`` (703-790) flattens a
+nested record (type id > 100) in field order and expands an array of
+records into leaves ``name_0_a``, ``name_1_a``, and so on (781-783). Nothing
+in that expansion is byte-aligned.
 
-Field names do not change the payload. ``CODEC_SPEC.md`` from
-astra-ground-station PR #6 was not on disk, so these comments do not cite
-Delphi line numbers.
+``LoadFieldOvrs`` (792-822) then appends one 1-bit ``ovr_<leaf>`` at the end
+of that whole flattened list, in leaf order. An array leaf (``qty > 1``) gets
+one bit, not one per element. A record node is not a leaf, so ``Override`` on
+a record row is not emitted. See ``docs/CODEC_SPEC.md``.
 """
 
 from __future__ import annotations
@@ -92,12 +92,11 @@ class FlatField:
 
 
 def flatten(fields: Sequence[Field]) -> tuple[FlatField, ...]:
-    """Return scalars in the order ``SaveValue`` then ``LoadFieldOvrs`` use.
+    """Return value leaves, then every ``ovr_`` bit.
 
-    Inside one record the value bits come first, including each nested
-    record's own trailing override bits, repeated once per array element.
-    This record's ``ovr_`` bits are one bool each, appended after that whole
-    record. An array gets one of those bits, not one per element.
+    Override bits are not inserted after each element or each nested record.
+    They are one bool per leaf with ``Override`` set, in leaf order, after
+    the packet's whole flattened field list.
     """
     values: list[FlatField] = []
     overrides: list[FlatField] = []
@@ -114,8 +113,10 @@ def encoded_bit_count(fields: Sequence[Field]) -> int:
 def encoded_size(fields: Sequence[Field]) -> int:
     """Return the payload size in bytes.
 
-    Matches ``spcalcvartypesizes``: ``ceiling(bit_count / 8)`` once, at this
-    layout. Nested records are not padded to a byte on their own.
+    Matches the packed payload: ``ceiling(bit_count / 8)`` once. Nested
+    records are not padded to a byte on their own. A record-level
+    ``Override`` is not included. ``spcalcvartypesizes`` counts that row, so
+    a database row that sets it can disagree with this length.
     """
     bits = encoded_bit_count(fields)
     return (bits + 7) // 8
@@ -132,14 +133,8 @@ def _append_field(
     if field.fields:
         for index in range(field.qty):
             element = base if field.qty == 1 else f"{base}_{index}"
-            child_values: list[FlatField] = []
-            child_overrides: list[FlatField] = []
             for child in field.fields:
-                _append_field(child, element, child_values, child_overrides)
-            values.extend(child_values)
-            values.extend(child_overrides)
-        if field.override:
-            overrides.append(FlatField(f"ovr_{base}", 1, 1, "override"))
+                _append_field(child, element, values, overrides)
         return
     width = TYPE_WIDTH[field.type_id]
     for index in range(field.qty):

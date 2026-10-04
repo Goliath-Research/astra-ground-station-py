@@ -1,19 +1,29 @@
 import pytest
 
-from astra.codec import CodecError
+from astra.codec import CodecError, pack
 from astra.settings import stage_count as configured_stage_count
 from astra.tmoip import (
-    MinorFrameLayout,
-    build_minor_frame,
+    MinorFrameEncoder,
+    StageDecoder,
+    StreamPacket,
     frame_due,
+    irig106_fields,
     minor_frame_packet_id,
-    parse_minor_frame,
     reassemble,
     stage_count,
     stage_port,
     stage_ports,
 )
 from astra.tmoip.__main__ import main
+
+_RATES = (0, 1, 10, 100, 200)
+_INCLUDED = {
+    0: {0, 1, 10, 100, 200},
+    1: {0, 200},
+    2: {0, 100, 200},
+    20: {0, 10, 100, 200},
+    200: {0, 1, 10, 100, 200},
+}
 
 
 def test_default_stage_ports_follow_the_delphi_decoder() -> None:
@@ -32,51 +42,104 @@ def test_minor_frame_ids_follow_stage_count() -> None:
     assert minor_frame_packet_id(3) == 306
 
 
-def test_encoder_rate_rule() -> None:
-    # AstraTMEncoder, before Sequence increments:
-    # (Sequence = 0) or (Sequence * packetRate mod irigRate = 0).
-    assert frame_due(0, 100, 200)
-    assert frame_due(0, 1, 1)
-    assert not frame_due(1, 100, 200)
-    assert frame_due(2, 100, 200)
-    assert frame_due(5, 0, 200)
+def test_irig_rate_zero_is_a_divide_by_zero() -> None:
+    with pytest.raises(ZeroDivisionError):
+        frame_due(0, 1, 0)
 
 
-def test_minor_frame_uses_configurable_widths_and_no_checksum() -> None:
-    # sf_id and row_id widths come from the database. This is a fixture
-    # layout, not a production row. The encoder writes int32 LE id 7 and
-    # zeros the rest of a 6-byte stream. No checksum byte is appended.
-    layout = MinorFrameLayout(sf_id_bits=8, row_id_bits=8, packet_stream_bytes=6)
-    frame = build_minor_frame(1, 2, 7, layout)
-    assert frame == bytes.fromhex("0102070000000000")
-    assert parse_minor_frame(frame, layout) == (1, 2, 7, bytes.fromhex("070000000000"))
+@pytest.mark.parametrize(
+    ("sequence", "rate"),
+    [(sequence, rate) for sequence in sorted(_INCLUDED) for rate in _RATES],
+    ids=[f"seq{sequence}-rate{rate}" for sequence in sorted(_INCLUDED) for rate in _RATES],
+)
+def test_rate_table_at_irig_200(sequence: int, rate: int) -> None:
+    # (Sequence = 0) or (Sequence * rate mod 200 = 0), before Sequence increments.
+    assert frame_due(sequence, rate, 200) is (rate in _INCLUDED[sequence])
 
 
-def test_minor_frame_fields_are_not_byte_aligned() -> None:
-    # 4-bit sf_id = 1, then 4-bit row_id = 2, share the first byte as 0x21.
-    layout = MinorFrameLayout(sf_id_bits=4, row_id_bits=4, packet_stream_bytes=4)
-    frame = build_minor_frame(1, 2, 7, layout)
-    assert frame == bytes.fromhex("2107000000")
-    assert parse_minor_frame(frame, layout) == (1, 2, 7, bytes.fromhex("07000000"))
+def test_encoder_builds_the_two_fixture_minor_frames() -> None:
+    # Packet 0x01020304, enc size 4. The 4-byte field takes the id first
+    # (04 03 02 01) and the zero payload on the next subframe. No id prefix,
+    # no checksum, listen port 2357+stage.
+    encoder = MinorFrameEncoder(
+        (StreamPacket(16909060, 100, 4),),
+        irig_rate=200,
+        row_id=1,
+        stage=1,
+        environ={},
+    )
+    first = encoder.tick()
+    assert first.payload == bytes.fromhex("010100000004030201")
+    assert first.port == 2358
+    assert first.sf_id == 1
+    assert encoder.sequence == 1
+    second = encoder.tick()
+    assert second.payload == bytes.fromhex("020100000000000000")
+    assert second.sf_id == 2
+    assert second.row_id == 1
+    assert encoder.sequence == 1
+    assert len(first.payload) == len(pack(irig106_fields(), [1, 1, 4, 3, 2, 1]))
 
 
-def test_minor_frame_stream_can_start_mid_byte() -> None:
-    # 4-bit sf_id = 1, 8-bit row_id = 0xAB, then the id continues at bit 12.
-    layout = MinorFrameLayout(sf_id_bits=4, row_id_bits=8, packet_stream_bytes=4)
-    frame = build_minor_frame(1, 0xAB, 1, layout)
-    # row's high nibble shares byte 1 with the start of the int32 id.
-    assert frame == bytes.fromhex("b11a00000000")
-    assert parse_minor_frame(frame, layout) == (1, 0xAB, 1, bytes.fromhex("01000000"))
+def test_decoder_reassembles_the_fixture_stream() -> None:
+    encoder = MinorFrameEncoder(
+        (StreamPacket(16909060, 100, 4),),
+        irig_rate=200,
+        row_id=1,
+        stage=1,
+        environ={},
+    )
+    decoder = StageDecoder(1, {16909060: 4}, estimated_row_id=1, environ={})
+    reassemble(encoder.tick().payload, decoder)
+    assert decoder.forwarded == []
+    reassemble(encoder.tick().payload, decoder)
+    assert decoder.logged[0].packet_id == 106
+    assert [(item.host, item.port, item.payload) for item in decoder.forwarded] == [
+        ("127.0.0.1", 2357, bytes.fromhex("0403020100000000"))
+    ]
 
 
-def test_minor_frame_rejects_a_short_stream_and_an_oversized_id() -> None:
-    with pytest.raises(ValueError):
-        MinorFrameLayout(sf_id_bits=8, row_id_bits=8, packet_stream_bytes=3)
-    layout = MinorFrameLayout(sf_id_bits=8, row_id_bits=8, packet_stream_bytes=4)
+def test_decoder_ignores_a_subframe_gap_until_the_next_row() -> None:
+    fields = irig106_fields(stream_qty=2)
+    decoder = StageDecoder(1, {7: 0}, estimated_row_id=5, fields=fields, environ={})
+    decoder.udp_read(pack(fields, [1, 1, 7, 0]))
+    assert decoder.forwarded == []
+    decoder.udp_read(pack(fields, [3, 1, 0, 0]))
+    decoder.udp_read(pack(fields, [4, 1, 9, 9]))
+    assert decoder.forwarded == []
+    decoder.udp_read(pack(fields, [1, 2, 0, 0]))
+    assert len(decoder.forwarded) == 1
+    assert decoder.forwarded[0].payload == bytes.fromhex("07000000")
+
+
+def test_decoder_drops_a_row_rewind_a_jump_and_sf_id_above_16() -> None:
+    fields = irig106_fields()
+    decoder = StageDecoder(2, {7: 0}, estimated_row_id=1, environ={})
+    decoder.udp_read(pack(fields, [1, 1, 0, 0, 0, 0]))
+    before = len(decoder.forwarded)
+    decoder.udp_read(pack(fields, [1, 0, 7, 0, 0, 0]))
+    decoder.udp_read(pack(fields, [1, 12, 7, 0, 0, 0]))
+    decoder.udp_read(pack(fields, [17, 1, 7, 0, 0, 0]))
+    assert len(decoder.forwarded) == before
+    assert decoder.logged[-1].packet_id == 206
+
+
+def test_decoder_skips_an_unknown_or_non_positive_id() -> None:
+    fields = irig106_fields()
+    decoder = StageDecoder(1, {7: 0}, estimated_row_id=1, environ={})
+    decoder.udp_read(pack(fields, [1, 1, 0, 0, 0, 0]))
+    decoder.udp_read(pack(fields, [2, 1, 7, 0, 0, 0]))
+    assert decoder.forwarded[-1].payload == bytes.fromhex("07000000")
+    assert decoder.forwarded[-1].port == 2357
+
+
+def test_bridge_port_override_is_where_the_decoder_sends() -> None:
+    decoder = StageDecoder(1, {7: 0}, environ={"ASTRA_BRIDGE_PORT": "2400"})
+    decoder.push_buffer_to_packet(bytes.fromhex("07000000"))
+    assert decoder.forwarded[0].port == 2400
+    assert decoder.forwarded[0].host == "127.0.0.1"
+
+
+def test_oversized_stream_packet_id_is_rejected() -> None:
     with pytest.raises(CodecError):
-        build_minor_frame(1, 2, 0x80000000, layout)
-
-
-def test_reassembly_is_not_ported() -> None:
-    with pytest.raises(NotImplementedError, match="TMoIP"):
-        reassemble(b"")
+        StreamPacket(0x80000000, 1, 0)
