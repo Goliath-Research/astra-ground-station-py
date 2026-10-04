@@ -1124,3 +1124,196 @@ def test_log_pages_only_after_the_job_is_done(client: TestClient, database_url: 
                 conn.execute(f"DROP TABLE IF EXISTS testlog.{table}")
                 conn.commit()
         _cleanup(database_url, root_id, server_id)
+
+
+def test_hardware_editor_creates_areas_boards_and_pins(
+    client: TestClient,
+    database_url: str,
+) -> None:
+    root_id: int | None = None
+    field_id: int | None = None
+    try:
+        vehicle = client.post("/api/tree", json={"name": "p8-vehicle", "icon_id": 1})
+        assert vehicle.status_code == 201
+        root_id = vehicle.json()["id"]
+        stage = client.post(
+            "/api/tree",
+            json={"name": "p8-stage", "parent_id": root_id, "icon_id": 2},
+        )
+        assert stage.status_code == 201
+        version = client.post(
+            "/api/tree",
+            json={"name": "p8-version", "parent_id": stage.json()["id"], "icon_id": 3},
+        )
+        release = client.post(
+            "/api/tree",
+            json={"name": "p8-release", "parent_id": version.json()["id"], "icon_id": 4},
+        )
+        smart = client.post(
+            "/api/tree",
+            json={"name": "p8-smart", "parent_id": release.json()["id"], "icon_id": 5},
+        )
+        assert smart.status_code == 201
+        smart_id = smart.json()["id"]
+
+        misplaced = client.post(
+            "/api/tree",
+            json={"name": "p8-hardware", "parent_id": stage.json()["id"], "icon_id": 8},
+        )
+        assert misplaced.status_code == 400
+
+        hardware = client.post(
+            "/api/tree",
+            json={"name": "p8-hardware", "parent_id": smart_id, "icon_id": 8},
+        )
+        assert hardware.status_code == 201
+        hardware_id = hardware.json()["id"]
+        assert hardware.json()["icon_id"] == 8
+        second = client.post(
+            "/api/tree",
+            json={"name": "p8-hardware-2", "parent_id": smart_id, "icon_id": 8},
+        )
+        assert second.status_code == 409
+        frozen = client.patch(f"/api/tree/{hardware_id}", json={"seq": 1})
+        assert frozen.status_code == 400
+        renamed = client.patch(f"/api/tree/{hardware_id}", json={"name": "p8-hw"})
+        assert renamed.status_code == 200
+        assert renamed.json()["name"] == "p8-hw"
+        copied_root = client.post(f"/api/tree/{hardware_id}/duplicate")
+        assert copied_root.status_code == 400
+
+        area_under_smart = client.post(
+            "/api/tree",
+            json={"name": "p8-area", "parent_id": smart_id, "icon_id": 9},
+        )
+        assert area_under_smart.status_code == 400
+        area = client.post(
+            "/api/tree",
+            json={"name": "p8-area", "parent_id": hardware_id, "icon_id": 9},
+        )
+        assert area.status_code == 201
+        area_id = area.json()["id"]
+        moved = client.patch(f"/api/tree/{area_id}", json={"seq": 1})
+        assert moved.status_code == 200
+
+        board_under_hardware = client.post(
+            "/api/tree",
+            json={"name": "p8-board", "parent_id": hardware_id, "icon_id": 10},
+        )
+        assert board_under_hardware.status_code == 400
+        board = client.post(
+            "/api/tree",
+            json={"name": "p8-board", "parent_id": area_id, "icon_id": 10},
+        )
+        assert board.status_code == 201
+        board_id = board.json()["id"]
+
+        link = client.post(
+            "/api/link-types",
+            json={"name": "W", "description": "p8-wire"},
+        )
+        assert link.status_code == 201
+        link_id = link.json()["id"]
+        assert link.json()["name"] == "W"
+        connector = client.post(
+            "/api/connectors",
+            json={"part_no": 1001, "description": "p8-plug"},
+        )
+        assert connector.status_code == 201
+        connector_id = connector.json()["id"]
+        assert connector.json()["part_no"] == 1001.0
+
+        missing_link = client.post(
+            f"/api/boards/{board_id}/connections",
+            json={"first_pin": 4, "link_type_id": 999999},
+        )
+        assert missing_link.status_code == 404
+        created = client.post(
+            f"/api/boards/{board_id}/connections",
+            json={
+                "first_pin": 4,
+                "link_type_id": link_id,
+                "connector_id": connector_id,
+                "short_name": "p8",
+                "description": "p8-pin",
+                "seq": 1,
+            },
+        )
+        assert created.status_code == 201
+        pin = created.json()
+        assert pin["first_pin"] == 4
+        assert pin["link_type_name"] == "W"
+        assert pin["part_no"] == 1001.0
+        assert pin["short_name"] == "p8"
+        cleared = client.patch(f"/api/connections/{pin['id']}", json={"short_name": None})
+        assert cleared.status_code == 200
+        assert cleared.json()["short_name"] is None
+        assert cleared.json()["description"] == "p8-pin"
+        empty = client.patch(f"/api/connections/{pin['id']}", json={})
+        assert empty.status_code == 400
+
+        listed = client.get(f"/api/boards/{board_id}/connections")
+        assert listed.status_code == 200
+        assert [row["id"] for row in listed.json()] == [pin["id"]]
+        wiring = client.get(f"/api/nodes/{hardware_id}/wiring")
+        assert wiring.status_code == 200
+        assert wiring.json()[0]["area"] == "p8-area"
+        assert wiring.json()[0]["board"] == "p8-board"
+        assert wiring.json()[0]["first_pin"] == 4
+        not_hardware = client.get(f"/api/nodes/{smart_id}/wiring")
+        assert not_hardware.status_code == 400
+        not_board = client.get(f"/api/boards/{area_id}/connections")
+        assert not_board.status_code == 400
+
+        copied = client.post(f"/api/tree/{board_id}/duplicate")
+        assert copied.status_code == 201
+        assert copied.json()["icon_id"] == 10
+        assert copied.json()["parent_id"] == area_id
+        assert copied.json()["name"] == "p8-board"
+        clone_pins = client.get(f"/api/boards/{copied.json()['id']}/connections")
+        assert clone_pins.status_code == 200
+        assert clone_pins.json()[0]["first_pin"] == 4
+        assert clone_pins.json()[0]["description"] == "p8-pin"
+        assert clone_pins.json()[0]["id"] != pin["id"]
+
+        packet_node = client.post(
+            "/api/tree",
+            json={"name": "p8-r2l", "parent_id": smart_id, "icon_id": 7},
+        )
+        assert packet_node.status_code == 201
+        node_id = packet_node.json()["id"]
+        _ensure_u8(database_url, root_id)
+        saved = client.put(
+            f"/api/nodes/{node_id}/packet",
+            json={"packet_id": 910180, "name": "p8-r2l", "is_input": False},
+        )
+        assert saved.status_code == 200
+        field = client.post(
+            f"/api/vartypes/{saved.json()['var_type_id']}/fields",
+            json={"name": "p8-flag", "type_id": 2, "qty": 1},
+        )
+        assert field.status_code == 201
+        field_id = field.json()["id"]
+        linked = client.post(
+            "/api/mappings",
+            json={"field_id": field_id, "connection_id": pin["id"]},
+        )
+        assert linked.status_code == 200
+        blocked = client.delete(f"/api/connections/{pin['id']}")
+        assert blocked.status_code == 409
+        unlinked = client.delete(f"/api/mappings/{field_id}")
+        assert unlinked.status_code == 200
+        removed = client.delete(f"/api/connections/{pin['id']}")
+        assert removed.status_code == 204
+        remaining = client.get(f"/api/nodes/{area_id}/wiring")
+        assert remaining.status_code == 200
+        assert len(remaining.json()) == 1
+        assert remaining.json()[0]["board"] == "p8-board"
+    finally:
+        if field_id is not None:
+            client.delete(f"/api/mappings/{field_id}")
+        _cleanup(database_url, root_id, None)
+        with connect(database_url) as conn:
+            conn.execute("DELETE FROM linktypes WHERE description LIKE 'p8-%'")
+            conn.execute("DELETE FROM connectors WHERE description LIKE 'p8-%'")
+            conn.commit()
