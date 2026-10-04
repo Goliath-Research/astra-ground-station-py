@@ -406,7 +406,19 @@ Feed a harness-generated `.DAT` through the Python exporter into PostgreSQL and,
 
 ### Phase 6 — web app
 
-Configurator workflows, then test manager, then the generator CLI. The Simulink CSV and the mapping CSV are compared to files the Win64 configurator writes for one synthetic node once the database is restored. The LabVIEW export is the OPC UA node list the bridge actually publishes, not the NI shared-variable CSV, unless question 12 says that file is still required. CSV from `ExportDataSetToCSV` uses `;` and quotes.
+Done. The operator app is `python -m astra.web`. It covers the configurator tree (add, rename, move, duplicate, delete), packet save and size calculation, var types and fields (nested records, description, short name, initial value, in-sequence, and transformation), pin mappings, devices, write-only server passwords, in-memory Send/Rate, and the three exports. Test manager pages start and stop a test, list jobs, and page or download the finished log. The generator CLI is `python -m astra.cli.generate`.
+
+CSV from `ExportDataSetToCSV` uses `;` and quotes. Booleans are `0`/`1`. Lines end with CRLF.
+
+Deliberate deviations:
+
+- Hardware icons 8–10, areas, boards, connectors, and print hardware stay in phase 8 (`AstraConfigurationManager`). The mapping screen lists pins that already exist. It does not edit that tree. Question 2 is still open.
+- The LabVIEW export is the OPC UA node list the bridge publishes (`Astra{PacketName}/{field}`), not the NI shared-variable CSV. Question 12 is still open.
+- DevExpress HTML, XML, XLS, and XLSX grid exports are not ported. A browser print of the mappings table is the wiring list.
+- There is no Win64 CSV golden in git, and no restored production database. The Simulink and mapping writers are checked against the `ExportDataSetToCSV` rules on a synthetic node, not against a file the Win64 configurator produced.
+- Deleting a vehicle removes that row only. Child rows stay, with the old parent id. Icons 2–10 still delete their subtree.
+- A transformation can be added and attached to a field. The page does not edit or delete an existing expression.
+- Send and Rate live in the web process. They are not columns on `packets`. A restart clears them.
 
 ### Phase 7 — device simulator and live capture
 
