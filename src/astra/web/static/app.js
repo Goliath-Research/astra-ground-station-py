@@ -8,6 +8,9 @@ const ICONS = {
   5: "Smart node",
   6: "L2R",
   7: "R2L",
+  8: "Hardware",
+  9: "Area",
+  10: "Board",
 };
 
 const state = {
@@ -15,6 +18,7 @@ const state = {
   selectedId: null,
   packet: null,
   fieldId: null,
+  connectionId: null,
   deviceId: null,
   serverId: null,
   testId: null,
@@ -117,11 +121,19 @@ async function reloadTree() {
   renderTree();
 }
 
+function syncTreeActions(node) {
+  const hardwareRoot = Boolean(node && node.icon_id === 8);
+  $("move-up").disabled = hardwareRoot;
+  $("move-down").disabled = hardwareRoot;
+}
+
 async function selectNode(nodeId) {
   state.selectedId = nodeId;
   clearFieldForm();
+  clearPinForm();
   renderTree();
   const node = selectedNode();
+  syncTreeActions(node);
   if (node) {
     $("node-name").value = node.name;
     if (node.icon_id === 5) {
@@ -147,6 +159,8 @@ async function showTab(name) {
     await loadFields();
   } else if (name === "mappings") {
     await loadMappings();
+  } else if (name === "hardware") {
+    await loadHardware();
   } else if (name === "transformations") {
     await loadTransformations();
   } else if (name === "devices") {
@@ -205,6 +219,7 @@ function addHeader(row, label) {
   const cell = document.createElement("th");
   cell.textContent = label;
   row.appendChild(cell);
+  return cell;
 }
 
 function setSelectValue(select, value) {
@@ -426,6 +441,202 @@ async function unlinkMapping(fieldId) {
   await api("/api/mappings/" + fieldId, { method: "DELETE" });
   await loadMappings();
   setStatus("Mapping cleared.", false);
+}
+
+function fillOptionalSelect(select, rows, label) {
+  const current = select.value;
+  select.replaceChildren();
+  const none = document.createElement("option");
+  none.value = "";
+  none.textContent = "None";
+  select.appendChild(none);
+  for (const row of rows) {
+    const option = document.createElement("option");
+    option.value = String(row.id);
+    option.textContent = label(row);
+    select.appendChild(option);
+  }
+  setSelectValue(select, current);
+}
+
+function clearPinForm() {
+  state.connectionId = null;
+  $("pin-first").value = "";
+  $("pin-seq").value = "";
+  $("pin-short-name").value = "";
+  $("pin-description").value = "";
+  $("pin-link-type").value = "";
+  $("pin-connector").value = "";
+}
+
+function pinBody() {
+  const seqRaw = $("pin-seq").value.trim();
+  const link = $("pin-link-type").value;
+  const connector = $("pin-connector").value;
+  return {
+    first_pin: Number($("pin-first").value),
+    seq: seqRaw === "" ? null : Number(seqRaw),
+    description: optionalText("pin-description"),
+    short_name: optionalText("pin-short-name"),
+    link_type_id: link === "" ? null : Number(link),
+    connector_id: connector === "" ? null : Number(connector),
+  };
+}
+
+async function loadPinChoices() {
+  const linkTypes = await api("/api/link-types");
+  const connectors = await api("/api/connectors");
+  fillOptionalSelect($("pin-link-type"), linkTypes, (row) => row.name + " " + row.description);
+  fillOptionalSelect(
+    $("pin-connector"),
+    connectors,
+    (row) => String(row.part_no) + (row.description ? " " + row.description : ""),
+  );
+}
+
+function applyPin(row) {
+  state.connectionId = row.id;
+  $("pin-first").value = String(row.first_pin);
+  $("pin-seq").value = row.seq == null ? "" : String(row.seq);
+  $("pin-short-name").value = row.short_name || "";
+  $("pin-description").value = row.description || "";
+  setSelectValue($("pin-link-type"), row.link_type_id == null ? "" : row.link_type_id);
+  setSelectValue($("pin-connector"), row.connector_id == null ? "" : row.connector_id);
+}
+
+async function loadHardware() {
+  const host = $("wiring");
+  host.replaceChildren();
+  const node = selectedNode();
+  const editor = $("pin-editor");
+  const hardware = node && (node.icon_id === 8 || node.icon_id === 9 || node.icon_id === 10);
+  editor.hidden = !(node && node.icon_id === 10);
+  if (!hardware) {
+    host.textContent = "Select a hardware, area, or board node.";
+    return;
+  }
+  if (node.icon_id === 10) {
+    await loadPinChoices();
+  }
+  const rows = await api("/api/nodes/" + node.id + "/wiring");
+  if (rows.length === 0) {
+    const empty = document.createElement("p");
+    empty.textContent = "No pins on this hardware.";
+    host.appendChild(empty);
+    return;
+  }
+  const table = document.createElement("table");
+  const head = document.createElement("tr");
+  for (const label of [
+    "Connection",
+    "Area",
+    "Board",
+    "First pin",
+    "Link type",
+    "Short name",
+    "Part #",
+    "Description",
+  ]) {
+    addHeader(head, label);
+  }
+  if (node.icon_id === 10) {
+    const actionHead = addHeader(head, "");
+    actionHead.className = "no-print";
+  }
+  table.appendChild(head);
+  for (const row of rows) {
+    const line = document.createElement("tr");
+    addCell(line, row.id);
+    addCell(line, row.area);
+    addCell(line, row.board);
+    addCell(line, row.first_pin);
+    addCell(line, row.link_type_name);
+    addCell(line, row.short_name);
+    addCell(line, row.part_no);
+    addCell(line, row.description);
+    if (node.icon_id === 10) {
+      const action = document.createElement("td");
+      action.className = "no-print";
+      const edit = document.createElement("button");
+      edit.type = "button";
+      edit.textContent = "Edit";
+      edit.addEventListener("click", () => applyPin(row));
+      action.appendChild(edit);
+      line.appendChild(action);
+    }
+    table.appendChild(line);
+  }
+  host.appendChild(table);
+}
+
+async function savePin() {
+  const node = selectedNode();
+  if (!node || node.icon_id !== 10) {
+    setStatus("Select a board first.", true);
+    return;
+  }
+  const body = pinBody();
+  if ($("pin-first").value.trim() === "" || !Number.isInteger(body.first_pin) || body.first_pin < 0) {
+    setStatus("Enter a first pin.", true);
+    return;
+  }
+  const saved = state.connectionId === null
+    ? await api("/api/boards/" + node.id + "/connections", { method: "POST", json: body })
+    : await api("/api/connections/" + state.connectionId, { method: "PATCH", json: body });
+  state.connectionId = saved.id;
+  await loadHardware();
+  applyPin(saved);
+  setStatus("Saved pin.", false);
+}
+
+async function deletePin() {
+  if (state.connectionId === null) {
+    setStatus("Select a pin first.", true);
+    return;
+  }
+  await api("/api/connections/" + state.connectionId, { method: "DELETE" });
+  clearPinForm();
+  await loadHardware();
+  setStatus("Deleted pin.", false);
+}
+
+async function addLinkType() {
+  const created = await api("/api/link-types", {
+    method: "POST",
+    json: {
+      name: $("link-type-name").value.trim(),
+      description: $("link-type-description").value.trim(),
+    },
+  });
+  $("link-type-name").value = "";
+  $("link-type-description").value = "";
+  await loadPinChoices();
+  setSelectValue($("pin-link-type"), created.id);
+  setStatus("Added link type.", false);
+}
+
+async function addConnector() {
+  const partText = $("connector-part").value.trim();
+  const part = Number(partText);
+  if (partText === "" || !Number.isFinite(part)) {
+    setStatus("Enter a part number.", true);
+    return;
+  }
+  const body = { part_no: part };
+  const description = optionalText("connector-description");
+  if (description !== null) {
+    body.description = description;
+  }
+  const created = await api("/api/connectors", { method: "POST", json: body });
+  $("connector-part").value = "";
+  $("connector-description").value = "";
+  await loadPinChoices();
+  setSelectValue($("pin-connector"), created.id);
+  setStatus("Added connector.", false);
+}
+
+function printHardware() {
+  window.print();
 }
 
 async function linkMapping() {
@@ -815,8 +1026,10 @@ function signOut() {
   state.logOffset = 0;
   clearPacketForm();
   clearFieldForm();
+  clearPinForm();
   clearDeviceForm();
   clearServerForm();
+  syncTreeActions(null);
   $("node-name").value = "";
   $("node-icon").value = "1";
   $("mapping-connection").value = "";
@@ -832,6 +1045,7 @@ function signOut() {
     "tree",
     "fields",
     "mappings",
+    "wiring",
     "transformations",
     "devices",
     "servers",
@@ -884,6 +1098,10 @@ async function moveNode(direction) {
   const node = selectedNode();
   if (!node) {
     setStatus("Select a node first.", true);
+    return;
+  }
+  if (node.icon_id === 8) {
+    setStatus("Hardware does not move.", true);
     return;
   }
   const index = siblingIndex(node);
@@ -942,6 +1160,10 @@ async function duplicateNode() {
     setStatus("A vehicle is not duplicated.", true);
     return;
   }
+  if (node.icon_id === 8) {
+    setStatus("Hardware is not duplicated.", true);
+    return;
+  }
   const copied = await api("/api/tree/" + node.id + "/duplicate", { method: "POST" });
   await reloadTree();
   await selectNode(copied.id);
@@ -956,11 +1178,14 @@ async function deleteNode() {
   }
   await api("/api/tree/" + node.id, { method: "DELETE" });
   state.selectedId = null;
+  syncTreeActions(null);
   await reloadTree();
   clearPacketForm();
   clearFieldForm();
+  clearPinForm();
   await loadFields();
   await loadMappings();
+  await loadHardware();
   setStatus("Deleted " + node.name, false);
 }
 
@@ -1217,6 +1442,12 @@ bind("move-down", () => moveNode(1));
 bind("duplicate-node", duplicateNode);
 bind("delete-node", deleteNode);
 bind("link-mapping", linkMapping);
+bind("print-hardware", printHardware);
+bind("save-pin", savePin);
+bind("clear-pin", async () => clearPinForm());
+bind("delete-pin", deletePin);
+bind("add-link-type", addLinkType);
+bind("add-connector", addConnector);
 bind("save-packet", savePacket);
 bind("calc-sizes", calcSizes);
 bind("export-simulink", () => downloadExport("simulink", "simulink.csv"));

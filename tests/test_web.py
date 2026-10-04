@@ -70,6 +70,7 @@ def test_operator_page_lists_the_configurator_screens() -> None:
         "Packet",
         "Fields",
         "Mappings",
+        "Hardware",
         "Transformations",
         "Devices",
         "Servers",
@@ -88,6 +89,11 @@ def test_operator_page_lists_the_configurator_screens() -> None:
     assert 'id="field-transformation"' in page.text
     assert 'id="field-record"' in page.text
     assert 'id="add-record"' in page.text
+    assert 'id="print-hardware"' in page.text
+    assert 'id="save-pin"' in page.text
+    assert 'value="8">Hardware' in page.text
+    assert 'value="9">Area' in page.text
+    assert 'value="10">Board' in page.text
     assert "In sequence" in page.text
     assert script.status_code == 200
     assert style.status_code == 200
@@ -123,6 +129,7 @@ def test_sign_out_clears_editor_ids() -> None:
         "state.logPacketId = null",
         "clearPacketForm()",
         "clearFieldForm()",
+        "clearPinForm()",
         "clearDeviceForm()",
         "clearServerForm()",
         '$("test-name").value = ""',
@@ -133,6 +140,13 @@ def test_sign_out_clears_editor_ids() -> None:
     ):
         assert snippet in sign_out
     assert "state.fieldId = null" in _function_body(script.text, "clearFieldForm")
+    assert "state.connectionId = null" in _function_body(script.text, "clearPinForm")
+    delete_node = _function_body(script.text, "deleteNode")
+    assert "clearPinForm()" in delete_node
+    assert "loadHardware()" in delete_node
+    hardware = _function_body(script.text, "loadHardware")
+    assert "row.id" in hardware
+    assert 'className = "no-print"' in hardware
     assert "state.deviceId = null" in _function_body(script.text, "clearDeviceForm")
     assert "state.serverId = null" in _function_body(script.text, "clearServerForm")
 

@@ -69,3 +69,13 @@ def as_opt_int(value: Any, *, minimum: int | None = None, maximum: int | None = 
     if value is None:
         return None
     return as_int(value, minimum=minimum, maximum=maximum)
+
+
+def as_float(value: Any) -> float:
+    """Accept a JSON number. Booleans and non-finite values are rejected."""
+    if isinstance(value, bool) or not isinstance(value, int | float):
+        raise ConfigError("invalid")
+    number = float(value)
+    if number != number or number in (float("inf"), float("-inf")):
+        raise ConfigError("invalid")
+    return number

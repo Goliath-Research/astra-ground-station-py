@@ -21,8 +21,7 @@ from psycopg.rows import dict_row
 
 from astra.db.errors import ConfigError
 
-# TreeVersions.IconID values the configurator draws. 8, 9, and 10 are the
-# hardware editor and are not created here.
+# TreeVersions.IconID values the configurator draws.
 ICON_VEHICLE = 1
 ICON_STAGE = 2
 ICON_VERSION = 3
@@ -30,6 +29,9 @@ ICON_RELEASE = 4
 ICON_SMART_NODE = 5
 ICON_L2R = 6
 ICON_R2L = 7
+ICON_HARDWARE = 8
+ICON_AREA = 9
+ICON_BOARD = 10
 CREATABLE_ICONS = frozenset(
     {
         ICON_VEHICLE,
@@ -39,10 +41,14 @@ CREATABLE_ICONS = frozenset(
         ICON_SMART_NODE,
         ICON_L2R,
         ICON_R2L,
+        ICON_HARDWARE,
+        ICON_AREA,
+        ICON_BOARD,
     }
 )
-# The version tree's Duplicate command. A vehicle has no sibling slot, and
-# icons 8–10 belong to the hardware editor.
+# Version-tree Duplicate covers icons 2–7. The hardware menu duplicates an
+# area or a board. A vehicle has no sibling slot, and the hardware root does
+# not move or duplicate.
 DUPLICATABLE_ICONS = frozenset(
     {
         ICON_STAGE,
@@ -51,8 +57,17 @@ DUPLICATABLE_ICONS = frozenset(
         ICON_SMART_NODE,
         ICON_L2R,
         ICON_R2L,
+        ICON_AREA,
+        ICON_BOARD,
     }
 )
+# Hardware sits under a smart node, an area under that hardware root, a board
+# under an area. spgethardwarenode reads a single icon-8 child.
+_PARENT_ICON = {
+    ICON_HARDWARE: ICON_SMART_NODE,
+    ICON_AREA: ICON_HARDWARE,
+    ICON_BOARD: ICON_AREA,
+}
 
 _SERVER_PUBLIC = """
 id, name, winname, fullname, ipv4, port, opcservername, sqlserverinstance,
@@ -102,6 +117,26 @@ _FIELD_COLUMNS: dict[str, str] = {
     "short_name": "shortname",
     "transformation_id": "transformationid",
 }
+
+_CONNECTION_COLUMNS: dict[str, str] = {
+    "first_pin": "firstpin",
+    "link_type_id": "linktypeid",
+    "connector_id": "connectorid",
+    "seq": "seq",
+    "description": "description",
+    "short_name": "shortname",
+}
+
+_CONNECTION_SELECT = """
+SELECT c.id, c.boardid, c.firstpin, c.linktypeid, c.connectorid, c.seq,
+       c.description, c.shortname,
+       lt.name AS linktypename,
+       k."conn part no" AS partno,
+       k.description AS connectordescription
+FROM connections AS c
+LEFT JOIN linktypes AS lt ON lt.id = c.linktypeid
+LEFT JOIN connectors AS k ON k.id = c.connectorid
+"""
 
 
 def _jsonable(value: Any) -> Any:
@@ -186,6 +221,44 @@ def _device(row: dict[str, Any]) -> dict[str, Any]:
 
 def _transformation(row: dict[str, Any]) -> dict[str, Any]:
     return {"id": row["id"], "name": row["name"], "expression": row["expression"]}
+
+
+def _stripped(value: Any) -> Any:
+    if isinstance(value, str):
+        return value.rstrip()
+    return value
+
+
+def _connection(row: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "id": row["id"],
+        "board_id": row["boardid"],
+        "first_pin": row["firstpin"],
+        "link_type_id": row["linktypeid"],
+        "connector_id": row["connectorid"],
+        "seq": row["seq"],
+        "description": row["description"],
+        "short_name": row["shortname"],
+        "link_type_name": _stripped(row["linktypename"]),
+        "part_no": row["partno"],
+        "connector_description": row["connectordescription"],
+    }
+
+
+def _link_type(row: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "id": row["id"],
+        "name": _stripped(row["name"]),
+        "description": row["description"],
+    }
+
+
+def _connector(row: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "id": row["id"],
+        "part_no": row["partno"],
+        "description": row["description"],
+    }
 
 
 def _mapping(row: dict[str, Any]) -> dict[str, Any]:
@@ -313,8 +386,20 @@ class ConfigRepo:
             raise ConfigError("invalid")
         if icon_id != ICON_VEHICLE and parent_id is None:
             raise ConfigError("invalid")
-        if parent_id is not None and self.node(parent_id) is None:
+        parent = None if parent_id is None else self.node(parent_id)
+        if parent_id is not None and parent is None:
             raise ConfigError("not_found")
+        expected_parent = _PARENT_ICON.get(icon_id)
+        if expected_parent is not None:
+            if parent is None or parent["icon_id"] != expected_parent:
+                raise ConfigError("invalid")
+        if icon_id == ICON_HARDWARE and parent_id is not None:
+            existing = self._one(
+                "SELECT id FROM treeversions WHERE parentid = %s AND iconid = %s",
+                (parent_id, ICON_HARDWARE),
+            )
+            if existing is not None:
+                raise ConfigError("conflict")
         row = self._one(
             """
             INSERT INTO treeversions (name, parentid, iconid)
@@ -345,9 +430,12 @@ class ConfigRepo:
         name: str | None,
         seq: int | None,
     ) -> dict[str, Any]:
-        if self.node(node_id) is None:
+        current = self.node(node_id)
+        if current is None:
             raise ConfigError("not_found")
         if name is None and seq is None:
+            raise ConfigError("invalid")
+        if seq is not None and current["icon_id"] == ICON_HARDWARE:
             raise ConfigError("invalid")
         if name is not None:
             self._exec("UPDATE treeversions SET name = %s WHERE id = %s", (name, node_id))
@@ -476,6 +564,175 @@ class ConfigRepo:
             if row["fieldid"] not in listed:
                 combined.append(row)
         return [_mapping(row) for row in combined]
+
+    def link_types(self) -> list[dict[str, Any]]:
+        rows = self._fetch("SELECT id, name, description FROM linktypes ORDER BY id")
+        return [_link_type(row) for row in rows]
+
+    def insert_link_type(self, *, name: str, description: str) -> dict[str, Any]:
+        if len(name) != 1:
+            raise ConfigError("invalid")
+        row = self._one(
+            """
+            INSERT INTO linktypes (id, name, description)
+            VALUES ((SELECT COALESCE(MAX(id), 0) + 1 FROM linktypes), %s, %s)
+            RETURNING id, name, description
+            """,
+            (name, description),
+        )
+        if row is None:
+            raise ConfigError("conflict")
+        return _link_type(row)
+
+    def connectors(self) -> list[dict[str, Any]]:
+        rows = self._fetch(
+            """
+            SELECT id, "conn part no" AS partno, description
+            FROM connectors
+            ORDER BY id
+            """
+        )
+        return [_connector(row) for row in rows]
+
+    def insert_connector(self, *, part_no: float, description: str | None) -> dict[str, Any]:
+        row = self._one(
+            """
+            INSERT INTO connectors ("conn part no", description)
+            VALUES (%s, %s)
+            RETURNING id, "conn part no" AS partno, description
+            """,
+            (part_no, description),
+        )
+        if row is None:
+            raise ConfigError("conflict")
+        return _connector(row)
+
+    def board_connections(self, board_id: int) -> list[dict[str, Any]]:
+        self._require_board(board_id)
+        rows = self._fetch(
+            _CONNECTION_SELECT
+            + " WHERE c.boardid = %s ORDER BY c.seq NULLS FIRST, c.firstpin, c.id",
+            (board_id,),
+        )
+        return [_connection(row) for row in rows]
+
+    def insert_connection(self, board_id: int, changes: dict[str, Any]) -> dict[str, Any]:
+        self._require_board(board_id)
+        self._check_pin_refs(changes)
+        if not isinstance(changes.get("first_pin"), int):
+            raise ConfigError("invalid")
+        row = self._one(
+            """
+            INSERT INTO connections (
+                boardid, firstpin, linktypeid, connectorid, seq, description, shortname
+            )
+            VALUES (%s, %s, %s, %s, %s, %s, %s)
+            RETURNING id
+            """,
+            (
+                board_id,
+                changes["first_pin"],
+                changes.get("link_type_id"),
+                changes.get("connector_id"),
+                changes.get("seq"),
+                changes.get("description"),
+                changes.get("short_name"),
+            ),
+        )
+        if row is None or not isinstance(row["id"], int):
+            raise ConfigError("conflict")
+        saved = self._connection_by_id(row["id"])
+        if saved is None:
+            raise ConfigError("conflict")
+        return saved
+
+    def update_connection(self, connection_id: int, changes: dict[str, Any]) -> dict[str, Any]:
+        if self._connection_by_id(connection_id) is None:
+            raise ConfigError("not_found")
+        self._check_pin_refs(changes)
+        clause, params = _assignments(changes, _CONNECTION_COLUMNS)
+        self._exec(
+            f"UPDATE connections SET {clause} WHERE id = %s",
+            (*params, connection_id),
+        )
+        saved = self._connection_by_id(connection_id)
+        if saved is None:
+            raise ConfigError("not_found")
+        return saved
+
+    def delete_connection(self, connection_id: int) -> None:
+        if self._one("SELECT id FROM connections WHERE id = %s", (connection_id,)) is None:
+            raise ConfigError("not_found")
+        self._exec("DELETE FROM connections WHERE id = %s", (connection_id,))
+
+    def wiring(self, node_id: int) -> list[dict[str, Any]]:
+        """Pins under a hardware root, area, or board, for the printable list."""
+        node = self.node(node_id)
+        if node is None:
+            raise ConfigError("not_found")
+        if node["icon_id"] not in (ICON_HARDWARE, ICON_AREA, ICON_BOARD):
+            raise ConfigError("invalid")
+        rows = self._fetch(
+            """
+            WITH RECURSIVE nodes AS (
+                SELECT id, name, parentid, iconid
+                FROM treeversions
+                WHERE id = %s
+                UNION ALL
+                SELECT child.id, child.name, child.parentid, child.iconid
+                FROM treeversions AS child
+                INNER JOIN nodes ON child.parentid = nodes.id
+                WHERE child.iconid IN (8, 9, 10)
+            )
+            SELECT a.name AS area, b.name AS board,
+                   c.id, c.boardid, c.firstpin, c.linktypeid, c.connectorid, c.seq,
+                   c.description, c.shortname,
+                   lt.name AS linktypename,
+                   k."conn part no" AS partno,
+                   k.description AS connectordescription
+            FROM nodes AS b
+            INNER JOIN treeversions AS a ON a.id = b.parentid
+            INNER JOIN connections AS c ON c.boardid = b.id
+            LEFT JOIN linktypes AS lt ON lt.id = c.linktypeid
+            LEFT JOIN connectors AS k ON k.id = c.connectorid
+            WHERE b.iconid = 10
+            ORDER BY a.name NULLS FIRST, b.name NULLS FIRST,
+                     c.seq NULLS FIRST, c.firstpin, c.id
+            """,
+            (node_id,),
+        )
+        listed: list[dict[str, Any]] = []
+        for row in rows:
+            item = _connection(row)
+            item["area"] = row["area"]
+            item["board"] = row["board"]
+            listed.append(item)
+        return listed
+
+    def _require_board(self, board_id: int) -> None:
+        node = self.node(board_id)
+        if node is None:
+            raise ConfigError("not_found")
+        if node["icon_id"] != ICON_BOARD:
+            raise ConfigError("invalid")
+
+    def _check_pin_refs(self, changes: dict[str, Any]) -> None:
+        link_type_id = changes.get("link_type_id")
+        if isinstance(link_type_id, int):
+            found = self._one("SELECT id FROM linktypes WHERE id = %s", (link_type_id,))
+            if found is None:
+                raise ConfigError("not_found")
+        connector_id = changes.get("connector_id")
+        if isinstance(connector_id, int):
+            found = self._one("SELECT id FROM connectors WHERE id = %s", (connector_id,))
+            if found is None:
+                raise ConfigError("not_found")
+
+    def _connection_by_id(self, connection_id: int) -> dict[str, Any] | None:
+        row = self._one(_CONNECTION_SELECT + " WHERE c.id = %s", (connection_id,))
+        if row is None:
+            return None
+        return _connection(row)
 
     def interface_node_id(self, stage: str, node: str, packet: str) -> int:
         """Resolve a packet node with ``spgetnodeid``.

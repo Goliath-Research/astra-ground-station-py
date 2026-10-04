@@ -37,6 +37,9 @@
           <option value="5">Smart node</option>
           <option value="6">L2R packet</option>
           <option value="7">R2L packet</option>
+          <option value="8">Hardware</option>
+          <option value="9">Area</option>
+          <option value="10">Board</option>
         </select>
         <div class="actions">
           <button type="button" id="add-node">Add</button>
@@ -53,6 +56,7 @@
           <button type="button" class="tab" data-tab="packet">Packet</button>
           <button type="button" class="tab" data-tab="fields">Fields</button>
           <button type="button" class="tab" data-tab="mappings">Mappings</button>
+          <button type="button" class="tab" data-tab="hardware">Hardware</button>
           <button type="button" class="tab" data-tab="transformations">Transformations</button>
           <button type="button" class="tab" data-tab="devices">Devices</button>
           <button type="button" class="tab" data-tab="servers">Servers</button>
@@ -127,6 +131,55 @@
           <div class="actions">
             <button type="button" id="save-field">Save field</button>
             <button type="button" id="clear-field">Clear</button>
+          </div>
+        </section>
+
+        <section id="panel-hardware" data-panel="hardware" hidden>
+          <h2>Hardware</h2>
+          <p>One hardware root under a smart node, areas under that root, and boards under an area. Pins belong to a board. Print is the browser wiring list.</p>
+          <div class="actions no-print">
+            <button type="button" id="print-hardware">Print wiring</button>
+          </div>
+          <div id="wiring"></div>
+          <div id="pin-editor" class="no-print" hidden>
+            <h3>Pin</h3>
+            <label for="pin-first">First pin</label>
+            <input id="pin-first" type="number" min="0" />
+            <label for="pin-seq">Seq</label>
+            <input id="pin-seq" type="number" />
+            <label for="pin-short-name">Short name</label>
+            <input id="pin-short-name" type="text" maxlength="16" />
+            <label for="pin-description">Description</label>
+            <input id="pin-description" type="text" maxlength="128" />
+            <label for="pin-link-type">Link type</label>
+            <select id="pin-link-type">
+              <option value="">None</option>
+            </select>
+            <label for="pin-connector">Connector</label>
+            <select id="pin-connector">
+              <option value="">None</option>
+            </select>
+            <div class="actions">
+              <button type="button" id="save-pin">Save pin</button>
+              <button type="button" id="clear-pin">Clear</button>
+              <button type="button" id="delete-pin">Delete pin</button>
+            </div>
+            <h3>Link type</h3>
+            <label for="link-type-name">Name</label>
+            <input id="link-type-name" type="text" maxlength="1" />
+            <label for="link-type-description">Description</label>
+            <input id="link-type-description" type="text" maxlength="50" />
+            <div class="actions">
+              <button type="button" id="add-link-type">Add link type</button>
+            </div>
+            <h3>Connector</h3>
+            <label for="connector-part">Part number</label>
+            <input id="connector-part" type="number" step="any" />
+            <label for="connector-description">Description</label>
+            <input id="connector-description" type="text" maxlength="255" />
+            <div class="actions">
+              <button type="button" id="add-connector">Add connector</button>
+            </div>
           </div>
         </section>
 

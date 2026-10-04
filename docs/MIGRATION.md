@@ -412,7 +412,7 @@ CSV from `ExportDataSetToCSV` uses `;` and quotes. Booleans are `0`/`1`. Lines e
 
 Deliberate deviations:
 
-- Hardware icons 8–10, areas, boards, connectors, and print hardware stay in phase 8 (`AstraConfigurationManager`). The mapping screen lists pins that already exist. It does not edit that tree. Question 2 is still open.
+- Hardware icons 8–10, areas, boards, connectors, and print hardware were deferred here. Phase 8 is that configurator editor. Question 2 leaves the EntityDAC tables out.
 - The LabVIEW export is the OPC UA node list the bridge publishes (`Astra{PacketName}/{field}`), not the NI shared-variable CSV. Question 12 is still open.
 - DevExpress HTML, XML, XLS, and XLSX grid exports are not ported. A browser print of the mappings table is the wiring list.
 - There is no Win64 CSV golden in git, and no restored production database. The Simulink and mapping writers are checked against the `ExportDataSetToCSV` rules on a synthetic node, not against a file the Win64 configurator produced.
@@ -428,7 +428,16 @@ Done for everything that does not need a vehicle. `python -m astra.cli.device` s
 
 ### Phase 8 — Configurator hardware editor
 
-The scripts in `database/` are the Configurator schema. They do not contain the EntityDAC v3 tables, and those tables stay out (question 2). The editor to port is the Configurator hardware tree: icon 8 under a smart node, icon 9 areas, icon 10 boards, connectors and pins, and a printable wiring list. Do not port `AstraConfigurationManager`.
+Done. The operator app creates the configurator hardware tree: icon 8 under a smart node (one root; `spgethardwarenode` reads a single child), icon 9 areas under that root, and icon 10 boards under an area. A board holds pins (`connections`: first pin, optional link type, connector, sequence, description, and short name). Areas and boards duplicate through `spduplicate`, which copies a board's pins. The hardware root does not move or duplicate. Print is the browser print of that wiring list.
+
+The scripts in `database/` are the Configurator schema. They do not contain the EntityDAC v3 tables, and those tables stay out (question 2). Do not port `AstraConfigurationManager`.
+
+Deliberate deviations:
+
+- Print is `window.print` of the wiring list, not a DevExpress report.
+- A connector row stores a part number and a description. Vendor, gender, circuits, and rows are not edited.
+- A link type is a one-character name plus a description. The table has no seed, so the page can add one.
+- A pin that a field still references cannot be deleted. `fields.connectionid` is `ON DELETE NO ACTION`, and the legacy delete trigger never runs in that case.
 
 The Chapter 10 C library stays unbuilt unless a real Chapter 10 file appears later. If it does, the test is `cffi` decode versus the upstream `irig106` tools on that file, on both architectures, not a rewrite.
 
@@ -468,6 +477,6 @@ Open questions for David:
 10. **Resolved.** `Jobs.PacketID` is the real key, together with `TestID`. `IntfID` is a generated UUID.
 11. **Resolved.** Production was built for x64 (Win64). Golden numeric values, including transformation 1, follow Win64 `float64` behavior.
 12. Who owns the LabVIEW change that retargets the VIs to the bridge’s OPC UA tags, and does the client still need the NI shared-variable CSV during the cutover? The destination itself is settled (question 3).
-13. Should the v3 hardware editor (`AstraConfigurationManager`) be dropped?
+13. **Default, pending override.** Yes. `AstraConfigurationManager` and the EntityDAC tables stay out. The configurator hardware tree is the editor (question 2). David can override.
 14. **Resolved.** The services run on Linux, probably Ubuntu, on x86_64 and possibly ARM64. LabVIEW is an OPC UA client of the bridge. Wheel, Mojo SDK, endianness, and CI consequences are in §5.
 15. **Compiler pin resolved.** Local builds and CI use `modular/max-nvidia-base:26.6.0` (manifest list `sha256:53a1f0b502e67f400b0bc3c4575fde73f84d468ea03b977eaad2ef6fcd303c31`), which ships Mojo 1.1.0 for linux/amd64 and linux/arm64. Still open: does the community license cover deploying a Mojo packer inside the service at the client site? The Python service runs without Mojo until that is confirmed.

@@ -5,7 +5,9 @@ memory table that started at Send false and Rate 0 and was never saved.
 This process does the same: ``PUT /api/stream/{packet_id}`` updates a
 table on the app, and a restart clears it.
 
-Hardware icons 8, 9, and 10 are not created. That editor is phase 8.
+Hardware icons 8, 9, and 10 are the configurator hardware tree: one
+hardware root under a smart node, areas under that root, boards under an
+area, and pins on a board. The EntityDAC v3 tables are not exposed.
 """
 
 from __future__ import annotations
@@ -27,6 +29,7 @@ from astra.opcua import tag_path
 from astra.web.csv_text import INTERFACE_COLUMNS, csv_document
 from astra.web.parse import (
     as_bool,
+    as_float,
     as_int,
     as_opt_int,
     as_opt_str,
@@ -76,6 +79,18 @@ _SERVER_KEYS = frozenset(
 )
 _TEST_KEYS = frozenset({"name", "description", "server_id"})
 _STREAM_KEYS = frozenset({"send", "rate"})
+_LINK_TYPE_KEYS = frozenset({"name", "description"})
+_CONNECTOR_KEYS = frozenset({"part_no", "description"})
+_CONNECTION_KEYS = frozenset(
+    {
+        "first_pin",
+        "link_type_id",
+        "connector_id",
+        "seq",
+        "description",
+        "short_name",
+    }
+)
 
 _MAPPING_COLUMNS = (
     "fieldid",
@@ -248,6 +263,95 @@ async def create_mapping(request: Request, repo: Repo) -> dict[str, Any]:
 @router.delete("/mappings/{field_id}")
 def remove_mapping(field_id: int, repo: Repo) -> dict[str, Any]:
     return repo.delete_mapping(field_id)
+
+
+def _connection_changes(body: dict[str, Any], *, creating: bool) -> dict[str, Any]:
+    reject_unknown(body, _CONNECTION_KEYS)
+    if creating:
+        require_fields(body, frozenset({"first_pin"}))
+    elif not body:
+        raise ConfigError("invalid")
+    changes: dict[str, Any] = {}
+    if "first_pin" in body:
+        changes["first_pin"] = as_int(body["first_pin"], minimum=0)
+    if "link_type_id" in body:
+        changes["link_type_id"] = as_opt_int(body["link_type_id"], minimum=1)
+    if "connector_id" in body:
+        changes["connector_id"] = as_opt_int(body["connector_id"], minimum=1)
+    if "seq" in body:
+        changes["seq"] = as_opt_int(body["seq"])
+    if "description" in body:
+        changes["description"] = as_opt_str(body["description"], 128)
+    if "short_name" in body:
+        changes["short_name"] = as_opt_str(body["short_name"], 16)
+    return changes
+
+
+@router.get("/link-types")
+def list_link_types(repo: Repo) -> list[dict[str, Any]]:
+    return repo.link_types()
+
+
+@router.post("/link-types", status_code=201)
+async def create_link_type(request: Request, repo: Repo) -> dict[str, Any]:
+    body = await _body(request)
+    reject_unknown(body, _LINK_TYPE_KEYS)
+    require_fields(body, frozenset({"name", "description"}))
+    return repo.insert_link_type(
+        name=as_str(body["name"], 1),
+        description=as_str(body["description"], 50),
+    )
+
+
+@router.get("/connectors")
+def list_connectors(repo: Repo) -> list[dict[str, Any]]:
+    return repo.connectors()
+
+
+@router.post("/connectors", status_code=201)
+async def create_connector(request: Request, repo: Repo) -> dict[str, Any]:
+    body = await _body(request)
+    reject_unknown(body, _CONNECTOR_KEYS)
+    require_fields(body, frozenset({"part_no"}))
+    description = as_opt_str(body["description"], 255) if "description" in body else None
+    return repo.insert_connector(part_no=as_float(body["part_no"]), description=description)
+
+
+@router.get("/boards/{board_id}/connections")
+def list_board_connections(board_id: int, repo: Repo) -> list[dict[str, Any]]:
+    return repo.board_connections(board_id)
+
+
+@router.post("/boards/{board_id}/connections", status_code=201)
+async def create_connection(
+    board_id: int,
+    request: Request,
+    repo: Repo,
+) -> dict[str, Any]:
+    body = await _body(request)
+    return repo.insert_connection(board_id, _connection_changes(body, creating=True))
+
+
+@router.patch("/connections/{connection_id}")
+async def patch_connection(
+    connection_id: int,
+    request: Request,
+    repo: Repo,
+) -> dict[str, Any]:
+    body = await _body(request)
+    return repo.update_connection(connection_id, _connection_changes(body, creating=False))
+
+
+@router.delete("/connections/{connection_id}", status_code=204)
+def remove_connection(connection_id: int, repo: Repo) -> Response:
+    repo.delete_connection(connection_id)
+    return Response(status_code=204)
+
+
+@router.get("/nodes/{node_id}/wiring")
+def list_wiring(node_id: int, repo: Repo) -> list[dict[str, Any]]:
+    """Pins under a hardware root, area, or board."""
+    return repo.wiring(node_id)
 
 
 def _csv_response(document: str, filename: str) -> Response:

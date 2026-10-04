@@ -139,6 +139,7 @@ nav {
 
 #fields,
 #mappings,
+#wiring,
 #log {
   overflow-x: auto;
 }
@@ -168,5 +169,34 @@ td {
 @media (max-width: 800px) {
   #workspace {
     grid-template-columns: 1fr;
+  }
+}
+
+@media print {
+  header,
+  aside,
+  nav,
+  #login,
+  #status,
+  .no-print {
+    display: none !important;
+  }
+
+  #workspace {
+    display: block;
+    margin: 0;
+  }
+
+  main {
+    border: 0;
+    padding: 0;
+  }
+
+  section[data-panel] {
+    display: none !important;
+  }
+
+  #panel-hardware {
+    display: block !important;
   }
 }
