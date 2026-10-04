@@ -274,15 +274,26 @@ class ConfigRepo:
             raise ConfigError("not_found")
         row = self._one(
             """
-            INSERT INTO treeversions (name, parentid, iconid, seq)
-            VALUES (%s, %s, %s, %s)
+            INSERT INTO treeversions (name, parentid, iconid)
+            VALUES (%s, %s, %s)
             RETURNING id, name, parentid, iconid, seq
             """,
-            (name, parent_id, icon_id, seq),
+            (name, parent_id, icon_id),
         )
         if row is None:
             raise ConfigError("conflict")
-        return _tree(row)
+        created = _tree(row)
+        if seq is None:
+            return created
+        if seq < 1:
+            raise ConfigError("invalid")
+        # Same meaning as a move: seq is a 1-based sibling position.
+        # spmovenodetoseq stores that position times 20.
+        self._exec("SELECT spmovenodetoseq(%s, %s)", (created["id"], seq))
+        placed = self.node(created["id"])
+        if placed is None:
+            raise ConfigError("not_found")
+        return placed
 
     def update_node(
         self,

@@ -272,6 +272,35 @@ def test_tree_packet_fields_sizes_and_stream(
         _cleanup(database_url, root_id, None)
 
 
+def test_create_seq_is_a_sibling_position(client: TestClient, database_url: str) -> None:
+    root_id: int | None = None
+    _wipe_named_fixtures(database_url)
+    try:
+        vehicle = client.post("/api/tree", json={"name": "p6-vehicle", "icon_id": 1})
+        assert vehicle.status_code == 201
+        root_id = vehicle.json()["id"]
+        first = client.post(
+            "/api/tree",
+            json={"name": "p6-a", "parent_id": root_id, "icon_id": 2, "seq": 1},
+        )
+        second = client.post(
+            "/api/tree",
+            json={"name": "p6-b", "parent_id": root_id, "icon_id": 2, "seq": 2},
+        )
+        middle = client.post(
+            "/api/tree",
+            json={"name": "p6-c", "parent_id": root_id, "icon_id": 2, "seq": 2},
+        )
+        assert first.status_code == 201
+        assert second.status_code == 201
+        assert middle.status_code == 201
+        siblings = [row for row in client.get("/api/tree").json() if row["parent_id"] == root_id]
+        assert [row["name"] for row in siblings] == ["p6-a", "p6-c", "p6-b"]
+        assert [row["seq"] for row in siblings] == [20, 40, 60]
+    finally:
+        _cleanup(database_url, root_id, None)
+
+
 def test_server_password_is_write_only(
     client: TestClient,
     database_url: str,
