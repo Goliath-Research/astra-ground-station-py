@@ -43,6 +43,7 @@
           <button type="button" id="rename-node">Rename</button>
           <button type="button" id="move-up">Move up</button>
           <button type="button" id="move-down">Move down</button>
+          <button type="button" id="duplicate-node">Duplicate</button>
           <button type="button" id="delete-node">Delete</button>
         </div>
       </aside>
@@ -51,6 +52,7 @@
         <nav>
           <button type="button" class="tab" data-tab="packet">Packet</button>
           <button type="button" class="tab" data-tab="fields">Fields</button>
+          <button type="button" class="tab" data-tab="mappings">Mappings</button>
           <button type="button" class="tab" data-tab="transformations">Transformations</button>
           <button type="button" class="tab" data-tab="devices">Devices</button>
           <button type="button" class="tab" data-tab="servers">Servers</button>
@@ -95,6 +97,17 @@
           <div class="actions">
             <button type="button" id="save-field">Save field</button>
             <button type="button" id="clear-field">Clear</button>
+          </div>
+        </section>
+
+        <section id="panel-mappings" data-panel="mappings" hidden>
+          <h2>Mappings</h2>
+          <p>A mapping stores the pin on the field. Select a field, enter a connection id, and link it. Unlink clears the pin. The table is the ordered list from the database.</p>
+          <div id="mappings"></div>
+          <label for="mapping-connection">Connection id</label>
+          <input id="mapping-connection" type="number" min="1" />
+          <div class="actions">
+            <button type="button" id="link-mapping">Link selected field</button>
           </div>
         </section>
 

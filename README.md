@@ -22,8 +22,10 @@ database layout in `docs/CODEC_DB_ANSWERS.md`. The TMoIP decoder reassembles
 `packet_stream` and forwards `id || body` to the configured bridge port.
 The exporter still raises `NotImplementedError`.
 The web app is FastAPI. `GET /health` and `GET /` are open. `/` is the
-configurator (tree, packet, fields, transformations, devices, servers, and
-Send/Rate). `/api` requires `ASTRA_WEB_TOKEN`. Server passwords are write-only.
+configurator (tree, packet, fields, mappings, transformations, devices,
+servers, and Send/Rate). `/api` requires `ASTRA_WEB_TOKEN`. Server passwords
+are write-only. Tree duplicate and pin mappings call `spduplicate`,
+`spaddmapping`, and `spdelmapping`.
 
 ## License
 

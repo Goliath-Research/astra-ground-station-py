@@ -142,6 +142,8 @@ async function showTab(name) {
   }
   if (name === "fields") {
     await loadFields();
+  } else if (name === "mappings") {
+    await loadMappings();
   } else if (name === "transformations") {
     await loadTransformations();
   } else if (name === "devices") {
@@ -210,7 +212,7 @@ async function loadFields() {
   const fields = await api("/api/vartypes/" + state.packet.var_type_id + "/fields");
   const table = document.createElement("table");
   const head = document.createElement("tr");
-  for (const label of ["Name", "Type", "Qty", "Seq", "Override"]) {
+  for (const label of ["Name", "Type", "Qty", "Seq", "Override", "Pin"]) {
     addHeader(head, label);
   }
   table.appendChild(head);
@@ -221,6 +223,7 @@ async function loadFields() {
     addCell(row, field.qty);
     addCell(row, field.seq);
     addCell(row, field.override ? "yes" : "no");
+    addCell(row, field.connection_id);
     row.addEventListener("click", () => {
       state.fieldId = field.id;
       $("field-name").value = field.name || "";
@@ -232,6 +235,77 @@ async function loadFields() {
     table.appendChild(row);
   }
   host.appendChild(table);
+}
+
+async function loadMappings() {
+  const host = $("mappings");
+  host.replaceChildren();
+  if (state.selectedId === null) {
+    host.textContent = "Select a packet node.";
+    return;
+  }
+  const rows = await api("/api/nodes/" + state.selectedId + "/mappings");
+  if (rows.length === 0) {
+    const empty = document.createElement("p");
+    empty.textContent = "No ordered mappings for this node.";
+    host.appendChild(empty);
+    return;
+  }
+  const table = document.createElement("table");
+  const head = document.createElement("tr");
+  for (const label of ["Area", "Board", "Pin", "Field", "Record"]) {
+    addHeader(head, label);
+  }
+  addHeader(head, "");
+  table.appendChild(head);
+  for (const row of rows) {
+    const line = document.createElement("tr");
+    addCell(line, row.area);
+    addCell(line, row.board);
+    addCell(line, row.first_pin);
+    addCell(line, row.field);
+    addCell(line, row.record);
+    const action = document.createElement("td");
+    const unlink = document.createElement("button");
+    unlink.type = "button";
+    unlink.textContent = "Unlink";
+    unlink.addEventListener("click", async () => {
+      try {
+        await unlinkMapping(row.field_id);
+      } catch (error) {
+        setStatus(error.message, true);
+      }
+    });
+    action.appendChild(unlink);
+    line.appendChild(action);
+    table.appendChild(line);
+  }
+  host.appendChild(table);
+}
+
+async function unlinkMapping(fieldId) {
+  await api("/api/mappings/" + fieldId, { method: "DELETE" });
+  await loadMappings();
+  setStatus("Mapping cleared.", false);
+}
+
+async function linkMapping() {
+  if (state.fieldId === null) {
+    setStatus("Select a field on the Fields tab first.", true);
+    return;
+  }
+  const connectionId = Number($("mapping-connection").value);
+  if (!Number.isInteger(connectionId) || connectionId < 1) {
+    setStatus("Enter a connection id.", true);
+    return;
+  }
+  await api("/api/mappings", {
+    method: "POST",
+    json: { field_id: state.fieldId, connection_id: connectionId },
+  });
+  $("mapping-connection").value = "";
+  await loadMappings();
+  setStatus("Field linked.", false);
 }
 
 async function loadTransformations() {
@@ -453,6 +527,22 @@ async function moveNode(direction) {
   await selectNode(node.id);
 }
 
+async function duplicateNode() {
+  const node = selectedNode();
+  if (!node) {
+    setStatus("Select a node first.", true);
+    return;
+  }
+  if (node.icon_id === 1) {
+    setStatus("A vehicle is not duplicated.", true);
+    return;
+  }
+  const copied = await api("/api/tree/" + node.id + "/duplicate", { method: "POST" });
+  await reloadTree();
+  await selectNode(copied.id);
+  setStatus("Duplicated as " + copied.name, false);
+}
+
 async function deleteNode() {
   const node = selectedNode();
   if (!node) {
@@ -654,7 +744,9 @@ bind("add-node", addNode);
 bind("rename-node", renameNode);
 bind("move-up", () => moveNode(-1));
 bind("move-down", () => moveNode(1));
+bind("duplicate-node", duplicateNode);
 bind("delete-node", deleteNode);
+bind("link-mapping", linkMapping);
 bind("save-packet", savePacket);
 bind("calc-sizes", calcSizes);
 bind("save-field", saveField);

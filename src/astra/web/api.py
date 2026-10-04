@@ -206,6 +206,32 @@ def remove_tree(node_id: int, repo: Repo) -> Response:
     return Response(status_code=204)
 
 
+@router.post("/tree/{node_id}/duplicate", status_code=201)
+def duplicate_tree(node_id: int, repo: Repo) -> dict[str, Any]:
+    return repo.duplicate_node(node_id)
+
+
+@router.get("/nodes/{node_id}/mappings")
+def list_mappings(node_id: int, repo: Repo) -> list[dict[str, Any]]:
+    return repo.mappings(node_id)
+
+
+@router.post("/mappings")
+async def create_mapping(request: Request, repo: Repo) -> dict[str, Any]:
+    body = await _body(request)
+    reject_unknown(body, frozenset({"field_id", "connection_id"}))
+    require_fields(body, frozenset({"field_id", "connection_id"}))
+    return repo.add_mapping(
+        field_id=as_int(body["field_id"], minimum=1),
+        connection_id=as_int(body["connection_id"], minimum=1),
+    )
+
+
+@router.delete("/mappings/{field_id}")
+def remove_mapping(field_id: int, repo: Repo) -> dict[str, Any]:
+    return repo.delete_mapping(field_id)
+
+
 @router.get("/nodes/{node_id}/packet")
 def get_packet(node_id: int, repo: Repo) -> dict[str, Any]:
     found = repo.packet(node_id)

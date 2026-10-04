@@ -39,6 +39,18 @@ CREATABLE_ICONS = frozenset(
         ICON_R2L,
     }
 )
+# The version tree's Duplicate command. A vehicle has no sibling slot, and
+# icons 8–10 belong to the hardware editor.
+DUPLICATABLE_ICONS = frozenset(
+    {
+        ICON_STAGE,
+        ICON_VERSION,
+        ICON_RELEASE,
+        ICON_SMART_NODE,
+        ICON_L2R,
+        ICON_R2L,
+    }
+)
 
 _SERVER_PUBLIC = """
 id, name, winname, fullname, ipv4, port, opcservername, sqlserverinstance,
@@ -49,7 +61,7 @@ _FIELD_SELECT = """
 SELECT f.id, f.name, f.qty, f.typeid, f.initialvalue, t.name AS typename,
        COALESCE(f.description, t.description) AS description,
        f.override, f.insequence, f.transformationid, f.seq, f.shortname,
-       f.vartypeid
+       f.vartypeid, f.connectionid
 FROM fields AS f
 INNER JOIN vartypes AS t ON f.typeid = t.id
 """
@@ -136,6 +148,7 @@ def _field(row: dict[str, Any]) -> dict[str, Any]:
         "seq": row["seq"],
         "short_name": row["shortname"],
         "var_type_id": row["vartypeid"],
+        "connection_id": row["connectionid"],
     }
 
 
@@ -169,6 +182,24 @@ def _device(row: dict[str, Any]) -> dict[str, Any]:
 
 def _transformation(row: dict[str, Any]) -> dict[str, Any]:
     return {"id": row["id"], "name": row["name"], "expression": row["expression"]}
+
+
+def _mapping(row: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "field_id": row["fieldid"],
+        "connection_id": row["connectionid"],
+        "field_order": row["fieldorder"],
+        "connection_order": row["connectionorder"],
+        "area": row["area"],
+        "board": row["board"],
+        "first_pin": row["firstpin"],
+        "interface": row["interface"],
+        "record": row["record"],
+        "qty": row["qty"],
+        "field": row["field"],
+        "short_name": row["shortname"],
+        "description": row["description"],
+    }
 
 
 def _test(row: dict[str, Any]) -> dict[str, Any]:
@@ -326,6 +357,68 @@ class ConfigRepo:
         if node["icon_id"] == ICON_VEHICLE:
             self._exec("SELECT spdeletenode(%s)", (node_id,))
         self._exec("SELECT spdelete(%s)", (node_id,))
+
+    def duplicate_node(self, source_id: int) -> dict[str, Any]:
+        """Copy a version-tree node by calling ``spduplicate``.
+
+        The Delphi command inserts a sibling named ``New Node``, gives it the
+        source icon, then calls the procedure. The procedure replaces the
+        placeholder name. Stage, version, release, and smart node become the
+        icon label; a packet keeps the source name.
+        """
+        source = self.node(source_id)
+        if source is None:
+            raise ConfigError("not_found")
+        if source["icon_id"] not in DUPLICATABLE_ICONS:
+            raise ConfigError("invalid")
+        parent_id = source["parent_id"]
+        if not isinstance(parent_id, int):
+            raise ConfigError("invalid")
+        placeholder = self._one(
+            """
+            INSERT INTO treeversions (name, parentid, iconid)
+            VALUES ('New Node', %s, %s)
+            RETURNING id
+            """,
+            (parent_id, source["icon_id"]),
+        )
+        if placeholder is None or not isinstance(placeholder["id"], int):
+            raise ConfigError("conflict")
+        target_id = placeholder["id"]
+        self._exec("SELECT spduplicate(%s, %s)", (source_id, target_id))
+        copied = self.node(target_id)
+        if copied is None:
+            raise ConfigError("not_found")
+        return copied
+
+    def add_mapping(self, field_id: int, connection_id: int) -> dict[str, Any]:
+        """Point a field at a pin. ``spaddmapping`` writes ``fields.connectionid``."""
+        if self._field_by_id(field_id) is None:
+            raise ConfigError("not_found")
+        if self._one("SELECT id FROM connections WHERE id = %s", (connection_id,)) is None:
+            raise ConfigError("not_found")
+        self._exec("SELECT spaddmapping(%s, %s)", (field_id, connection_id))
+        saved = self._field_by_id(field_id)
+        if saved is None:
+            raise ConfigError("not_found")
+        return saved
+
+    def delete_mapping(self, field_id: int) -> dict[str, Any]:
+        """Clear a field pin. ``spdelmapping`` ignores the connection argument."""
+        if self._field_by_id(field_id) is None:
+            raise ConfigError("not_found")
+        self._exec("SELECT spdelmapping(%s, %s)", (field_id, 0))
+        saved = self._field_by_id(field_id)
+        if saved is None:
+            raise ConfigError("not_found")
+        return saved
+
+    def mappings(self, node_id: int) -> list[dict[str, Any]]:
+        """Ordered pin list from ``spgetmappingwithorders`` for one packet node."""
+        if self.node(node_id) is None:
+            raise ConfigError("not_found")
+        rows = self._fetch("SELECT * FROM spgetmappingwithorders(%s)", (node_id,))
+        return [_mapping(row) for row in rows]
 
     def packet(self, node_id: int) -> dict[str, Any] | None:
         row = self._one(
