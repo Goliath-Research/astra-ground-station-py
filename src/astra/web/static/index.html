@@ -83,21 +83,47 @@
 
         <section id="panel-fields" data-panel="fields" hidden>
           <h2>Fields</h2>
-          <p>Order is sequence, with a blank sequence first, then name. Nested records on this packet are listed so a pin can be linked.</p>
+          <p>Order is sequence, with a blank sequence first, then name. Nested records on this packet are listed so a pin can be linked. A new field is saved on the selected record.</p>
           <div id="fields"></div>
+          <h3>Record</h3>
+          <label for="field-record">Record</label>
+          <select id="field-record"></select>
+          <label for="record-name">New record name</label>
+          <input id="record-name" type="text" maxlength="50" />
+          <label for="record-description">Record description</label>
+          <input id="record-description" type="text" maxlength="128" />
+          <label for="record-short-name">Record short name</label>
+          <input id="record-short-name" type="text" maxlength="16" />
+          <div class="actions">
+            <button type="button" id="add-record">Add record</button>
+          </div>
           <h3>Add or update a field</h3>
           <label for="field-name">Name</label>
           <input id="field-name" type="text" maxlength="50" />
-          <label for="field-type-id">Type id</label>
-          <input id="field-type-id" type="number" min="1" />
+          <label for="field-type-id">Type</label>
+          <select id="field-type-id"></select>
           <label for="field-qty">Qty</label>
           <input id="field-qty" type="number" min="1" value="1" />
+          <label for="field-initial">Initial value</label>
+          <input id="field-initial" type="text" maxlength="128" />
           <label for="field-seq">Seq</label>
           <input id="field-seq" type="number" />
+          <label for="field-description">Description</label>
+          <input id="field-description" type="text" maxlength="128" />
+          <label for="field-short-name">Short name</label>
+          <input id="field-short-name" type="text" maxlength="16" />
           <label class="check" for="field-override">
             <input id="field-override" type="checkbox" />
             Override
           </label>
+          <label class="check" for="field-in-sequence">
+            <input id="field-in-sequence" type="checkbox" />
+            In sequence
+          </label>
+          <label for="field-transformation">Transformation</label>
+          <select id="field-transformation">
+            <option value="">None</option>
+          </select>
           <div class="actions">
             <button type="button" id="save-field">Save field</button>
             <button type="button" id="clear-field">Clear</button>

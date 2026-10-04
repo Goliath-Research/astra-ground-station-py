@@ -83,12 +83,33 @@ def test_operator_page_lists_the_configurator_screens() -> None:
     assert "Simulink CSV" in page.text
     assert "Mapping CSV" in page.text
     assert "OPC UA nodes" in page.text
+    assert 'id="field-description"' in page.text
+    assert 'id="field-in-sequence"' in page.text
+    assert 'id="field-transformation"' in page.text
+    assert 'id="field-record"' in page.text
+    assert 'id="add-record"' in page.text
+    assert "In sequence" in page.text
     assert script.status_code == 200
     assert style.status_code == 200
     assert "console.log" not in script.text
     assert "password_set" in script.text
     assert 'testAction(row.id, "start", "Start")' in script.text
     assert 'testAction(row.id, "stop", "Stop")' in script.text
+    save_field = _function_body(script.text, "saveField")
+    assert "fieldEditorBody()" in save_field
+    editor = _function_body(script.text, "fieldEditorBody")
+    for column in (
+        "description",
+        "in_sequence",
+        "transformation_id",
+        "initial_value",
+        "short_name",
+    ):
+        assert column in editor
+    clear_field = _function_body(script.text, "clearFieldForm")
+    assert "field-description" in clear_field
+    assert "field-in-sequence" in clear_field
+    assert "field-transformation" in clear_field
 
 
 def test_sign_out_clears_editor_ids() -> None:
@@ -106,6 +127,9 @@ def test_sign_out_clears_editor_ids() -> None:
         "clearServerForm()",
         '$("test-name").value = ""',
         '$("test-server").value = ""',
+        '$("record-name").value = ""',
+        '$("record-description").value = ""',
+        '$("record-short-name").value = ""',
     ):
         assert snippet in sign_out
     assert "state.fieldId = null" in _function_body(script.text, "clearFieldForm")

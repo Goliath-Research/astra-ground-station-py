@@ -207,14 +207,100 @@ function addHeader(row, label) {
   row.appendChild(cell);
 }
 
+function setSelectValue(select, value) {
+  const text = value == null ? "" : String(value);
+  const exists = Array.from(select.options).some((option) => option.value === text);
+  if (!exists && text !== "") {
+    const extra = document.createElement("option");
+    extra.value = text;
+    extra.textContent = text;
+    select.appendChild(extra);
+  }
+  select.value = text;
+}
+
+function fillTypeSelect(types) {
+  const select = $("field-type-id");
+  const current = select.value;
+  select.replaceChildren();
+  const seen = new Set();
+  for (const row of types) {
+    if (seen.has(row.id)) {
+      continue;
+    }
+    seen.add(row.id);
+    const option = document.createElement("option");
+    option.value = String(row.id);
+    option.textContent = row.name + " (" + row.id + ")";
+    select.appendChild(option);
+  }
+  setSelectValue(select, current);
+}
+
+function fillTransformationSelect(rows) {
+  const select = $("field-transformation");
+  const current = select.value;
+  select.replaceChildren();
+  const none = document.createElement("option");
+  none.value = "";
+  none.textContent = "None";
+  select.appendChild(none);
+  for (const row of rows) {
+    const option = document.createElement("option");
+    option.value = String(row.id);
+    option.textContent = row.name;
+    select.appendChild(option);
+  }
+  setSelectValue(select, current);
+}
+
+function fillRecordSelect(records) {
+  const select = $("field-record");
+  const current = select.value;
+  select.replaceChildren();
+  for (const row of records) {
+    const option = document.createElement("option");
+    option.value = String(row.id);
+    option.textContent = row.name;
+    select.appendChild(option);
+  }
+  const kept = Array.from(select.options).some((option) => option.value === current);
+  if (kept && current !== "") {
+    select.value = current;
+    return;
+  }
+  if (state.packet) {
+    setSelectValue(select, state.packet.var_type_id);
+    return;
+  }
+  if (select.options.length > 0) {
+    select.selectedIndex = 0;
+  }
+}
+
+function transformationName(rows, id) {
+  if (id == null) {
+    return "";
+  }
+  for (const row of rows) {
+    if (row.id === id) {
+      return row.name;
+    }
+  }
+  return String(id);
+}
+
 async function loadFields() {
   const host = $("fields");
   host.replaceChildren();
-  if (!state.packet) {
-    host.textContent = "Save a packet on the selected node before editing fields.";
+  if (state.selectedId === null) {
+    host.textContent = "Select a packet node.";
     return;
   }
   const types = await api("/api/scopes/" + state.selectedId + "/vartypes");
+  const transforms = await api("/api/transformations");
+  fillTypeSelect(types);
+  fillTransformationSelect(transforms);
   const seen = new Set();
   const records = [];
   for (const row of types) {
@@ -223,6 +309,11 @@ async function loadFields() {
     }
     seen.add(row.id);
     records.push(row);
+  }
+  fillRecordSelect(records);
+  if (!state.packet && records.length === 0) {
+    host.textContent = "Save a packet on the selected node before editing fields.";
+    return;
   }
   const fields = [];
   for (const record of records) {
@@ -233,7 +324,19 @@ async function loadFields() {
   }
   const table = document.createElement("table");
   const head = document.createElement("tr");
-  for (const label of ["Record", "Name", "Type", "Qty", "Seq", "Override", "Pin"]) {
+  for (const label of [
+    "Record",
+    "Name",
+    "Type",
+    "Qty",
+    "Initial",
+    "Seq",
+    "Override",
+    "In sequence",
+    "Transformation",
+    "Description",
+    "Pin",
+  ]) {
     addHeader(head, label);
   }
   table.appendChild(head);
@@ -243,16 +346,29 @@ async function loadFields() {
     addCell(row, field.name);
     addCell(row, field.type_name + " (" + field.type_id + ")");
     addCell(row, field.qty);
+    addCell(row, field.initial_value);
     addCell(row, field.seq);
     addCell(row, field.override ? "yes" : "no");
+    addCell(row, field.in_sequence ? "yes" : "no");
+    addCell(row, transformationName(transforms, field.transformation_id));
+    addCell(row, field.description);
     addCell(row, field.connection_id);
     row.addEventListener("click", () => {
       state.fieldId = field.id;
       $("field-name").value = field.name || "";
-      $("field-type-id").value = String(field.type_id);
+      setSelectValue($("field-type-id"), field.type_id);
       $("field-qty").value = String(field.qty || 1);
+      $("field-initial").value = field.initial_value || "";
       $("field-seq").value = field.seq == null ? "" : String(field.seq);
+      $("field-description").value = field.description || "";
+      $("field-short-name").value = field.short_name || "";
       $("field-override").checked = Boolean(field.override);
+      $("field-in-sequence").checked = Boolean(field.in_sequence);
+      setSelectValue($("field-record"), field.var_type_id);
+      setSelectValue(
+        $("field-transformation"),
+        field.transformation_id == null ? "" : field.transformation_id,
+      );
     });
     table.appendChild(row);
   }
@@ -707,6 +823,9 @@ function signOut() {
   $("transform-expression").value = "";
   $("test-name").value = "";
   $("test-server").value = "";
+  $("record-name").value = "";
+  $("record-description").value = "";
+  $("record-short-name").value = "";
   $("packet-node").textContent = "Select a node in the tree.";
   for (const id of [
     "tree",
@@ -877,43 +996,101 @@ async function calcSizes() {
   setStatus("Calculated sizes.", false);
 }
 
-async function saveField() {
-  if (!state.packet) {
-    setStatus("Save a packet first.", true);
-    return;
-  }
+function optionalText(id) {
+  const text = $(id).value.trim();
+  return text === "" ? null : text;
+}
+
+function fieldEditorBody() {
   const seqRaw = $("field-seq").value.trim();
-  const body = {
+  const transformRaw = $("field-transformation").value;
+  return {
     name: $("field-name").value.trim(),
     type_id: Number($("field-type-id").value),
     qty: Number($("field-qty").value),
+    seq: seqRaw === "" ? null : Number(seqRaw),
+    initial_value: optionalText("field-initial"),
+    description: optionalText("field-description"),
+    short_name: optionalText("field-short-name"),
     override: $("field-override").checked,
+    in_sequence: $("field-in-sequence").checked,
+    transformation_id: transformRaw === "" ? null : Number(transformRaw),
   };
+}
+
+async function saveField() {
+  if (state.selectedId === null) {
+    setStatus("Select a packet node first.", true);
+    return;
+  }
+  const recordId = Number($("field-record").value);
+  if (!Number.isInteger(recordId) || recordId < 1) {
+    setStatus("Select a record.", true);
+    return;
+  }
+  const body = fieldEditorBody();
+  if (!Number.isInteger(body.type_id) || body.type_id < 1) {
+    setStatus("Select a type.", true);
+    return;
+  }
   let saved;
   if (state.fieldId === null) {
-    if (seqRaw !== "") {
-      body.seq = Number(seqRaw);
-    }
-    saved = await api("/api/vartypes/" + state.packet.var_type_id + "/fields", {
+    saved = await api("/api/vartypes/" + recordId + "/fields", {
       method: "POST",
       json: body,
     });
   } else {
-    body.seq = seqRaw === "" ? null : Number(seqRaw);
     saved = await api("/api/fields/" + state.fieldId, { method: "PATCH", json: body });
   }
   state.fieldId = saved.id;
   await loadFields();
+  setSelectValue($("field-record"), saved.var_type_id);
   setStatus("Saved field.", false);
 }
 
 function clearFieldForm() {
   state.fieldId = null;
   $("field-name").value = "";
-  $("field-type-id").value = "";
+  setSelectValue($("field-type-id"), "2");
   $("field-qty").value = "1";
+  $("field-initial").value = "";
   $("field-seq").value = "";
+  $("field-description").value = "";
+  $("field-short-name").value = "";
   $("field-override").checked = false;
+  $("field-in-sequence").checked = false;
+  $("field-transformation").value = "";
+}
+
+async function addRecord() {
+  if (state.selectedId === null) {
+    setStatus("Select a packet node first.", true);
+    return;
+  }
+  const name = $("record-name").value.trim();
+  if (!name) {
+    setStatus("Enter a record name.", true);
+    return;
+  }
+  const body = { name: name };
+  const description = optionalText("record-description");
+  const shortName = optionalText("record-short-name");
+  if (description !== null) {
+    body.description = description;
+  }
+  if (shortName !== null) {
+    body.short_name = shortName;
+  }
+  const created = await api("/api/scopes/" + state.selectedId + "/vartypes", {
+    method: "POST",
+    json: body,
+  });
+  $("record-name").value = "";
+  $("record-description").value = "";
+  $("record-short-name").value = "";
+  await loadFields();
+  setSelectValue($("field-record"), created.id);
+  setStatus("Added record " + created.name, false);
 }
 
 async function addTransformation() {
@@ -1042,6 +1219,7 @@ bind("export-mapping", () => downloadExport("mapping", "mapping.csv"));
 bind("export-opcua", () => downloadExport("opcua", "opcua-nodes.txt"));
 bind("save-field", saveField);
 bind("clear-field", async () => clearFieldForm());
+bind("add-record", addRecord);
 bind("add-transform", addTransformation);
 bind("save-device", saveDevice);
 bind("clear-device", async () => clearDeviceForm());
