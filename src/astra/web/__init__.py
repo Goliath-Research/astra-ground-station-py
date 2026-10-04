@@ -1,15 +1,21 @@
 """Operator web application.
 
 FastAPI replaces the Delphi configurator and test manager. ``GET /health``
-stays open for the process check. ``/api`` is the JSON API and requires
-``ASTRA_WEB_TOKEN``. HTML screens are a later slice of phase 6.
+and ``GET /`` stay open. ``/api`` is the JSON API and requires
+``ASTRA_WEB_TOKEN``. The page at ``/`` is the configurator.
 """
 
+from pathlib import Path
+
 from fastapi import FastAPI
+from fastapi.responses import FileResponse
+from fastapi.staticfiles import StaticFiles
 
 from astra import __version__
 from astra.web.api import router
 from astra.web.settings import WebSettings, web_settings_from_env
+
+STATIC_DIR = Path(__file__).resolve().parent / "static"
 
 WEB_STACK = "fastapi"
 
@@ -30,4 +36,11 @@ def create_app(settings: WebSettings | None = None) -> FastAPI:
     def health() -> dict[str, str]:
         return {"status": "ok"}
 
+    index = STATIC_DIR / "index.html"
+
+    @app.get("/")
+    def home() -> FileResponse:
+        return FileResponse(index)
+
+    app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
     return app

@@ -1,0 +1,169 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Astra configurator</title>
+    <link rel="stylesheet" href="/static/app.css" />
+  </head>
+  <body>
+    <header>
+      <h1>Astra configurator</h1>
+      <button type="button" id="sign-out" hidden>Sign out</button>
+    </header>
+
+    <section id="login">
+      <h2>Operator sign-in</h2>
+      <p>Use the <code>ASTRA_WEB_TOKEN</code> configured for this process.</p>
+      <label for="token">Token</label>
+      <input id="token" type="password" autocomplete="current-password" />
+      <button type="button" id="open-session">Open</button>
+    </section>
+
+    <p id="status" role="status"></p>
+
+    <div id="workspace" hidden>
+      <aside>
+        <h2>Configuration tree</h2>
+        <div id="tree"></div>
+        <label for="node-name">Name</label>
+        <input id="node-name" type="text" maxlength="50" />
+        <label for="node-icon">Kind</label>
+        <select id="node-icon">
+          <option value="1">Vehicle</option>
+          <option value="2">Stage</option>
+          <option value="3">Version</option>
+          <option value="4">Release</option>
+          <option value="5">Smart node</option>
+          <option value="6">L2R packet</option>
+          <option value="7">R2L packet</option>
+        </select>
+        <div class="actions">
+          <button type="button" id="add-node">Add</button>
+          <button type="button" id="rename-node">Rename</button>
+          <button type="button" id="move-up">Move up</button>
+          <button type="button" id="move-down">Move down</button>
+          <button type="button" id="delete-node">Delete</button>
+        </div>
+      </aside>
+
+      <main>
+        <nav>
+          <button type="button" class="tab" data-tab="packet">Packet</button>
+          <button type="button" class="tab" data-tab="fields">Fields</button>
+          <button type="button" class="tab" data-tab="transformations">Transformations</button>
+          <button type="button" class="tab" data-tab="devices">Devices</button>
+          <button type="button" class="tab" data-tab="servers">Servers</button>
+          <button type="button" class="tab" data-tab="stream">Send / Rate</button>
+        </nav>
+
+        <section id="panel-packet" data-panel="packet">
+          <h2>Packet</h2>
+          <p id="packet-node">Select a packet node in the tree.</p>
+          <label for="packet-id">Packet id</label>
+          <input id="packet-id" type="number" min="1" />
+          <label for="packet-name">Name</label>
+          <input id="packet-name" type="text" maxlength="50" />
+          <label class="check" for="packet-is-input">
+            <input id="packet-is-input" type="checkbox" />
+            Input (L2R)
+          </label>
+          <p>Enc size <span id="enc-size">—</span> bytes. Dec size <span id="dec-size">—</span> bytes.</p>
+          <div class="actions">
+            <button type="button" id="save-packet">Save packet</button>
+            <button type="button" id="calc-sizes">Calculate sizes</button>
+          </div>
+        </section>
+
+        <section id="panel-fields" data-panel="fields" hidden>
+          <h2>Fields</h2>
+          <p>Order is sequence, with a blank sequence first, then name.</p>
+          <div id="fields"></div>
+          <h3>Add or update a field</h3>
+          <label for="field-name">Name</label>
+          <input id="field-name" type="text" maxlength="50" />
+          <label for="field-type-id">Type id</label>
+          <input id="field-type-id" type="number" min="1" />
+          <label for="field-qty">Qty</label>
+          <input id="field-qty" type="number" min="1" value="1" />
+          <label for="field-seq">Seq</label>
+          <input id="field-seq" type="number" />
+          <label class="check" for="field-override">
+            <input id="field-override" type="checkbox" />
+            Override
+          </label>
+          <div class="actions">
+            <button type="button" id="save-field">Save field</button>
+            <button type="button" id="clear-field">Clear</button>
+          </div>
+        </section>
+
+        <section id="panel-transformations" data-panel="transformations" hidden>
+          <h2>Transformations</h2>
+          <div id="transformations"></div>
+          <label for="transform-name">Name</label>
+          <input id="transform-name" type="text" maxlength="50" />
+          <label for="transform-expression">Expression</label>
+          <input id="transform-expression" type="text" maxlength="128" />
+          <div class="actions">
+            <button type="button" id="add-transform">Add transformation</button>
+          </div>
+        </section>
+
+        <section id="panel-devices" data-panel="devices" hidden>
+          <h2>Devices</h2>
+          <div id="devices"></div>
+          <label for="device-name">Name</label>
+          <input id="device-name" type="text" maxlength="64" />
+          <label for="device-smart-node">Smart node id</label>
+          <input id="device-smart-node" type="number" min="1" />
+          <label for="device-ipv4">IPv4</label>
+          <input id="device-ipv4" type="text" maxlength="15" />
+          <label for="device-port">Port</label>
+          <input id="device-port" type="number" min="1" max="65535" value="2357" />
+          <div class="actions">
+            <button type="button" id="save-device">Save device</button>
+            <button type="button" id="clear-device">Clear</button>
+          </div>
+        </section>
+
+        <section id="panel-servers" data-panel="servers" hidden>
+          <h2>Servers</h2>
+          <p>The password is write-only. The table shows whether one is stored. Leave the password blank when editing to keep the current value.</p>
+          <div id="servers"></div>
+          <label for="server-name">Name</label>
+          <input id="server-name" type="text" maxlength="50" />
+          <label for="server-win-name">Windows name</label>
+          <input id="server-win-name" type="text" maxlength="64" />
+          <label for="server-full-name">Full name</label>
+          <input id="server-full-name" type="text" maxlength="128" />
+          <label for="server-ipv4">IPv4</label>
+          <input id="server-ipv4" type="text" maxlength="15" />
+          <label for="server-port">Port</label>
+          <input id="server-port" type="number" min="1" max="65535" value="2357" />
+          <label for="server-opc">OPC server name</label>
+          <input id="server-opc" type="text" maxlength="128" />
+          <label for="server-sql">SQL instance</label>
+          <input id="server-sql" type="text" maxlength="128" />
+          <label for="server-database">Database name</label>
+          <input id="server-database" type="text" maxlength="64" />
+          <label for="server-username">Username</label>
+          <input id="server-username" type="text" maxlength="64" autocomplete="off" />
+          <label for="server-password">Password</label>
+          <input id="server-password" type="password" maxlength="64" autocomplete="new-password" />
+          <div class="actions">
+            <button type="button" id="save-server">Save server</button>
+            <button type="button" id="clear-server">Clear</button>
+          </div>
+        </section>
+
+        <section id="panel-stream" data-panel="stream" hidden>
+          <h2>Send / Rate</h2>
+          <p>Send starts off and Rate starts at 0. These values stay in this process and are cleared when it restarts. They are not written to the database.</p>
+          <div id="stream"></div>
+        </section>
+      </main>
+    </div>
+    <script src="/static/app.js"></script>
+  </body>
+</html>

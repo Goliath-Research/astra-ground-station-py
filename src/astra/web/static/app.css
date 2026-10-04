@@ -1,0 +1,162 @@
+:root {
+  color-scheme: light;
+  font-family: "Segoe UI", sans-serif;
+  background: #f4f1ea;
+  color: #1c1915;
+}
+
+body {
+  margin: 0;
+}
+
+[hidden] {
+  display: none !important;
+}
+
+header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0.75rem 1.25rem;
+  background: #243028;
+  color: #f4f1ea;
+}
+
+header h1,
+h2,
+h3 {
+  margin: 0;
+  font-weight: 600;
+}
+
+h1 {
+  font-size: 1.15rem;
+}
+
+#login,
+#workspace,
+#status {
+  margin: 1rem 1.25rem;
+}
+
+#login {
+  max-width: 24rem;
+  display: grid;
+  gap: 0.4rem;
+}
+
+#workspace {
+  display: grid;
+  grid-template-columns: 18rem 1fr;
+  gap: 1rem;
+  align-items: start;
+}
+
+aside,
+main,
+#login {
+  background: #fffdf8;
+  border: 1px solid #d9d1c3;
+  padding: 0.9rem;
+}
+
+aside,
+section[data-panel] {
+  display: grid;
+  gap: 0.45rem;
+}
+
+label {
+  font-size: 0.85rem;
+}
+
+input,
+select,
+button {
+  font: inherit;
+}
+
+input,
+select {
+  padding: 0.3rem 0.4rem;
+  border: 1px solid #b7ad9e;
+  background: #fff;
+}
+
+button {
+  padding: 0.35rem 0.65rem;
+  border: 1px solid #243028;
+  background: #243028;
+  color: #f4f1ea;
+  cursor: pointer;
+}
+
+button.tab {
+  background: #fffdf8;
+  color: #243028;
+}
+
+button.tab[aria-selected="true"] {
+  background: #243028;
+  color: #f4f1ea;
+}
+
+button.danger {
+  background: #8c3a2f;
+  border-color: #8c3a2f;
+}
+
+.actions,
+nav {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+
+.check {
+  display: flex;
+  gap: 0.4rem;
+  align-items: center;
+}
+
+#tree button.node {
+  display: block;
+  width: 100%;
+  text-align: left;
+  background: transparent;
+  color: inherit;
+  border-color: transparent;
+}
+
+#tree button.node[aria-current="true"] {
+  background: #e7efe4;
+  border-color: #243028;
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.92rem;
+}
+
+th,
+td {
+  border-bottom: 1px solid #e4dccf;
+  text-align: left;
+  padding: 0.3rem 0.35rem;
+  vertical-align: top;
+}
+
+#status {
+  min-height: 1.2rem;
+}
+
+#status.error {
+  color: #8c3a2f;
+}
+
+@media (max-width: 800px) {
+  #workspace {
+    grid-template-columns: 1fr;
+  }
+}
