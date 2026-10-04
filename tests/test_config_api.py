@@ -660,6 +660,29 @@ def test_mapping_links_a_field_and_lists_the_pin(
         assert row["board"] == "p6-board"
         assert row["first_pin"] == 3
         assert row["connection_id"] == connection_id
+        root_field = client.post(
+            f"/api/vartypes/{var_type_id}/fields",
+            json={"name": "flags", "type_id": 2, "qty": 1},
+        )
+        assert root_field.status_code == 201
+        root_field_id = root_field.json()["id"]
+        root_linked = client.post(
+            "/api/mappings",
+            json={"field_id": root_field_id, "connection_id": connection_id},
+        )
+        assert root_linked.status_code == 200
+        both = client.get(f"/api/nodes/{node_id}/mappings")
+        assert both.status_code == 200
+        by_name = {item["field"]: item for item in both.json()}
+        assert set(by_name) == {"pinfield", "flags"}
+        assert by_name["flags"]["field_id"] == root_field_id
+        assert by_name["flags"]["area"] == "p6-area"
+        assert by_name["flags"]["first_pin"] == 3
+        cleared_root = client.delete(f"/api/mappings/{root_field_id}")
+        assert cleared_root.status_code == 200
+        assert cleared_root.json()["connection_id"] is None
+        after_root = client.get(f"/api/nodes/{node_id}/mappings")
+        assert [item["field"] for item in after_root.json()] == ["pinfield"]
         cleared = client.delete(f"/api/mappings/{field_id}")
         assert cleared.status_code == 200
         assert cleared.json()["connection_id"] is None

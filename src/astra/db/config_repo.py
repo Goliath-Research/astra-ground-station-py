@@ -412,11 +412,39 @@ class ConfigRepo:
         return saved
 
     def mappings(self, node_id: int) -> list[dict[str, Any]]:
-        """Ordered pin list from ``spgetmappingwithorders`` for one packet node."""
+        """Ordered pin list for one packet node.
+
+        ``spgetmappingwithorders`` returns fields owned by a nested record.
+        A pin on the packet root is stored by ``spaddmapping`` but omitted
+        there, so those rows are appended and can be cleared.
+        """
         if self.node(node_id) is None:
             raise ConfigError("not_found")
         rows = self._fetch("SELECT * FROM spgetmappingwithorders(%s)", (node_id,))
-        return [_mapping(row) for row in rows]
+        listed = {row["fieldid"] for row in rows}
+        extras = self._fetch(
+            """
+            SELECT f.id AS fieldid, f.connectionid,
+                   NULL::integer AS fieldorder, NULL::integer AS connectionorder,
+                   a.name AS area, b.name AS board, c.firstpin,
+                   i.name AS interface, t.name AS record, f.qty,
+                   f.name AS field, c.shortname, c.description
+            FROM fields AS f
+            INNER JOIN vartypes AS t ON t.id = f.vartypeid
+            INNER JOIN treeversions AS i ON i.id = t.scopeid
+            INNER JOIN connections AS c ON c.id = f.connectionid
+            INNER JOIN treeversions AS b ON b.id = c.boardid
+            INNER JOIN treeversions AS a ON a.id = b.parentid
+            WHERE t.scopeid = %s AND f.connectionid IS NOT NULL
+            ORDER BY f.seq NULLS FIRST, f.name NULLS FIRST, f.id
+            """,
+            (node_id,),
+        )
+        combined = list(rows)
+        for row in extras:
+            if row["fieldid"] not in listed:
+                combined.append(row)
+        return [_mapping(row) for row in combined]
 
     def packet(self, node_id: int) -> dict[str, Any] | None:
         row = self._one(
