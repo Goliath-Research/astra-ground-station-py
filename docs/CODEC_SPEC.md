@@ -88,7 +88,9 @@ Samples `(id, x, y, y_f64_le_hex)`, none of which take the OPC substitution:
 `(14, 2500.0, 2.5, 0000000000000440)`.
 
 `TransformInput` (1102-1128), the id-1 cube-root inverse, is never called.
-L2R packs OPC values as they arrive.
+L2R packs OPC values as they arrive. The migrated database has no
+`TransformationID` on any L2R field, so the send path never inverse-transforms
+engineering units. See `docs/CODEC_DB_ANSWERS.md`.
 
 `AstraInpPopper.SyncWrite` (95-120) runs `TransformOutput`, then if the OPC
 type is `Single` or `Double` and `v == 0` exactly, sets `v = 1e-7`
@@ -101,10 +103,17 @@ into the packet.
 
 ## Minor frame
 
-The minor frame is a normal Astra packet named IRIG106. `sf_id`, `row_id`,
-and `packet_stream` have database-defined types, widths, and array length.
-The vectors' fixture is `sf_id: u8`, `row_id: i32`, `packet_stream: u8[4]`.
-It is packed with `SavePacket`. The bytes inside `packet_stream` come from
+The minor frame is a normal Astra packet named IRIG106. The default layout
+is the migrated config database, and it is the same for Stage 1 and Stage 2:
+`fap` (nested FAP, 160 bits), `fsp` u32, `sf_id` u8, `row_id` u32,
+`range_variables` u8[120], `packet_stream` u8[200]. That is 28 leaves, 2792
+bits, and 349 bytes, with no pad. The codec reads `sf_id`, `row_id`, and
+`packet_stream` by name. The other fields pass through. Offsets and the
+packets that can ride in `packet_stream` are in `docs/CODEC_DB_ANSWERS.md`.
+
+The transcribed vectors in this file use the smaller fixture `sf_id: u8`,
+`row_id: i32`, `packet_stream: u8[4]`. That fixture is not the default. It
+is packed with `SavePacket`. The bytes inside `packet_stream` come from
 the encoder's `PacketStream` buffer.
 
 `AstraTMEncoder/_AstraTMEncoder.pas` `BuildPacketStream` (168-210): before
@@ -157,16 +166,15 @@ and sends the packed IRIG106 packet with no id prefix (272) to listen port
 - `SendAndClearPacket` (410-414) UDP-sends the `id || body` bytes unchanged
   to `127.0.0.1` on the configured bridge port (the Delphi literal is 2357).
 
-## What the Delphi source does not settle
+## What the database does not settle
 
-- The real IRIG106 field types, `Seq` order, and `packet_stream` length.
-- Whether any database row sets `Override` on a record. SQL counts that bit,
-  but `LoadFieldOvrs` does not emit it, so the byte length can disagree.
+The other questions the Delphi source left open are answered in
+`docs/CODEC_DB_ANSWERS.md`.
+
 - Whether rocket firmware clamps, wraps, or rejects out-of-range values
-  before sending.
-- Whether LabVIEW writes engineering units into L2R tags. Those values would
-  be packed raw.
-- The deployed OPC server name and `Servers.Port`.
-- The exception class for a non-numeric value.
+  before sending. The database has no min, max, or CHECK constraint.
+  `range_variables` is the test range, not a value range. The codec keeps
+  the low bits (300 as u8 is `2c`).
+- The exception class for a non-numeric value. The codec raises `CodecError`.
 - Chapter 10 checksums, sync, and TMATS. They are present in unused files
   and are never checked on the live path.

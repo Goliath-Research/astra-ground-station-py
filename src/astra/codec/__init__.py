@@ -6,6 +6,8 @@ packs as 0. Mojo is not imported. ``ASTRA_NATIVE_BACKEND=mojo`` is rejected
 until ``pack_records`` exists; the flat ``(bit_width, kind)`` layout is the
 surface that function would take. ``transform_output`` is the OPC polynomial.
 ``sync_write`` applies it and the ``1e-7`` substitution; ``pack`` does not.
+No L2R field in the migrated database has a ``TransformationID``, so the
+send path packs the values it is given.
 """
 
 from collections.abc import Sequence
@@ -20,7 +22,10 @@ from astra.codec.types import (
     Field,
     FlatField,
     encoded_size,
+    field_sort_key,
     flatten,
+    packed_enc_bytes,
+    sort_fields,
 )
 from astra.native import active_backend
 
@@ -33,7 +38,10 @@ __all__ = [
     "Value",
     "device_t_ms",
     "encoded_size",
+    "field_sort_key",
     "flatten",
+    "packed_enc_bytes",
+    "sort_fields",
     "get_opc_type",
     "pack",
     "pack_flat",
@@ -52,6 +60,9 @@ def pack(fields: Sequence[Field], values: Sequence[Value]) -> bytes:
     """Pack ``values`` for ``fields`` into a payload.
 
     The buffer is cleared first. Unused bits in the last byte stay zero.
+    Values are written as given. L2R has no ``TransformationID`` in the
+    migrated database, and this function does not call ``transform_output``
+    or scale a Q type. Transforms run on the receive path.
     """
     active_backend()
     return pack_flat(flatten(fields), values)

@@ -7,9 +7,9 @@ from astra.tmoip import (
     StageDecoder,
     StreamPacket,
     frame_due,
-    irig106_fields,
     minor_frame_packet_id,
     reassemble,
+    spec_fixture_fields,
     stage_count,
     stage_port,
     stage_ports,
@@ -61,11 +61,13 @@ def test_encoder_builds_the_two_fixture_minor_frames() -> None:
     # Packet 0x01020304, enc size 4. The 4-byte field takes the id first
     # (04 03 02 01) and the zero payload on the next subframe. No id prefix,
     # no checksum, listen port 2357+stage.
+    fields = spec_fixture_fields()
     encoder = MinorFrameEncoder(
-        (StreamPacket(16909060, 100, 4),),
+        (StreamPacket(16909060, 100, 4, send=True),),
         irig_rate=200,
         row_id=1,
         stage=1,
+        fields=fields,
         environ={},
     )
     first = encoder.tick()
@@ -78,7 +80,7 @@ def test_encoder_builds_the_two_fixture_minor_frames() -> None:
     assert second.sf_id == 2
     assert second.row_id == 1
     assert encoder.sequence == 1
-    assert len(first.payload) == len(pack(irig106_fields(), [1, 1, 4, 3, 2, 1]))
+    assert len(first.payload) == len(pack(fields, [1, 1, 4, 3, 2, 1]))
 
 
 def test_next_build_cycle_advances_the_row_and_reassembles() -> None:
@@ -86,14 +88,16 @@ def test_next_build_cycle_advances_the_row_and_reassembles() -> None:
     # payload bytes, split across two minor frames. After the buffer drains,
     # SubFrameID restarts at 1 on the next row. The same row with sf_id 1
     # again would be a gap and PushStream would drop the later cycles.
+    fields = spec_fixture_fields()
     encoder = MinorFrameEncoder(
-        (StreamPacket(16909060, 200, 4),),
+        (StreamPacket(16909060, 200, 4, send=True),),
         irig_rate=200,
         row_id=1,
         stage=1,
+        fields=fields,
         environ={},
     )
-    decoder = StageDecoder(1, {16909060: 4}, estimated_row_id=1, environ={})
+    decoder = StageDecoder(1, {16909060: 4}, estimated_row_id=1, fields=fields, environ={})
     frames = [encoder.tick() for _ in range(4)]
     assert [(frame.sf_id, frame.row_id, frame.payload.hex()) for frame in frames] == [
         (1, 1, "010100000004030201"),
@@ -108,7 +112,8 @@ def test_next_build_cycle_advances_the_row_and_reassembles() -> None:
 
 
 def test_same_row_subframe_restart_stays_a_gap() -> None:
-    decoder = StageDecoder(1, {16909060: 4}, estimated_row_id=1, environ={})
+    fields = spec_fixture_fields()
+    decoder = StageDecoder(1, {16909060: 4}, estimated_row_id=1, fields=fields, environ={})
     decoder.udp_read(bytes.fromhex("010100000004030201"))
     decoder.udp_read(bytes.fromhex("020100000000000000"))
     assert len(decoder.forwarded) == 1
@@ -120,14 +125,16 @@ def test_same_row_subframe_restart_stays_a_gap() -> None:
 
 
 def test_decoder_reassembles_the_fixture_stream() -> None:
+    fields = spec_fixture_fields()
     encoder = MinorFrameEncoder(
-        (StreamPacket(16909060, 100, 4),),
+        (StreamPacket(16909060, 100, 4, send=True),),
         irig_rate=200,
         row_id=1,
         stage=1,
+        fields=fields,
         environ={},
     )
-    decoder = StageDecoder(1, {16909060: 4}, estimated_row_id=1, environ={})
+    decoder = StageDecoder(1, {16909060: 4}, estimated_row_id=1, fields=fields, environ={})
     reassemble(encoder.tick().payload, decoder)
     assert decoder.forwarded == []
     reassemble(encoder.tick().payload, decoder)
@@ -138,7 +145,7 @@ def test_decoder_reassembles_the_fixture_stream() -> None:
 
 
 def test_decoder_ignores_a_subframe_gap_until_the_next_row() -> None:
-    fields = irig106_fields(stream_qty=2)
+    fields = spec_fixture_fields(stream_qty=2)
     decoder = StageDecoder(1, {7: 0}, estimated_row_id=5, fields=fields, environ={})
     decoder.udp_read(pack(fields, [1, 1, 7, 0]))
     assert decoder.forwarded == []
@@ -151,8 +158,8 @@ def test_decoder_ignores_a_subframe_gap_until_the_next_row() -> None:
 
 
 def test_decoder_drops_a_row_rewind_a_jump_and_sf_id_above_16() -> None:
-    fields = irig106_fields()
-    decoder = StageDecoder(2, {7: 0}, estimated_row_id=1, environ={})
+    fields = spec_fixture_fields()
+    decoder = StageDecoder(2, {7: 0}, estimated_row_id=1, fields=fields, environ={})
     decoder.udp_read(pack(fields, [1, 1, 0, 0, 0, 0]))
     before = len(decoder.forwarded)
     decoder.udp_read(pack(fields, [1, 0, 7, 0, 0, 0]))
@@ -163,8 +170,8 @@ def test_decoder_drops_a_row_rewind_a_jump_and_sf_id_above_16() -> None:
 
 
 def test_decoder_skips_an_unknown_or_non_positive_id() -> None:
-    fields = irig106_fields()
-    decoder = StageDecoder(1, {7: 0}, estimated_row_id=1, environ={})
+    fields = spec_fixture_fields()
+    decoder = StageDecoder(1, {7: 0}, estimated_row_id=1, fields=fields, environ={})
     decoder.udp_read(pack(fields, [1, 1, 0, 0, 0, 0]))
     decoder.udp_read(pack(fields, [2, 1, 7, 0, 0, 0]))
     assert decoder.forwarded[-1].payload == bytes.fromhex("07000000")

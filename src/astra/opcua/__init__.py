@@ -11,6 +11,9 @@ from collections.abc import Mapping
 import asyncua
 
 DEFAULT_ENDPOINT = "opc.tcp://0.0.0.0:4840/astra/"
+# config.servers OPC DA ProgID. Legacy reference only; the bridge publishes
+# OPC UA at ``ASTRA_OPCUA_ENDPOINT`` and does not connect to this name.
+LEGACY_OPC_DA_SERVER = "National Instruments.Variable Engine.1"
 
 
 def library_version() -> str:

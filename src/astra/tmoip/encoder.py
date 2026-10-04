@@ -20,7 +20,7 @@ from dataclasses import dataclass
 from astra.codec import pack
 from astra.codec.errors import CodecError
 from astra.codec.python_pack import Value
-from astra.codec.types import Field
+from astra.codec.types import Field, flatten
 from astra.settings import stage_port
 from astra.tmoip.irig import (
     irig106_fields,
@@ -28,18 +28,24 @@ from astra.tmoip.irig import (
     stream_nbytes,
     values_from_stream_bytes,
 )
-from astra.tmoip.rate import frame_due
+from astra.tmoip.rate import DEFAULT_ENCODER_RATE_HZ, frame_due
 
 _INT32 = struct.Struct("<i")
 
 
 @dataclass(frozen=True, slots=True)
 class StreamPacket:
-    """One packet the encoder may place on the minor-frame stream."""
+    """One packet the encoder may place on the minor-frame stream.
+
+    ``Send`` and ``Rate`` are runtime state. They default to off and 0,
+    which is how ``FormCreate`` fills ``tblPackets``. A rate of 0 is due
+    on every major frame once ``send`` is true.
+    """
 
     packet_id: int
-    packet_rate: int
-    enc_size: int
+    packet_rate: int = 0
+    enc_size: int = 0
+    send: bool = False
 
     def __post_init__(self) -> None:
         if isinstance(self.packet_id, bool) or not isinstance(self.packet_id, int):
@@ -54,6 +60,8 @@ class StreamPacket:
             raise CodecError(f"enc_size must be an integer >= 0, got {self.enc_size!r}")
         if self.enc_size < 0:
             raise CodecError(f"enc_size must be an integer >= 0, got {self.enc_size!r}")
+        if not isinstance(self.send, bool):
+            raise CodecError(f"send must be a bool, got {self.send!r}")
 
 
 @dataclass(frozen=True, slots=True)
@@ -80,7 +88,7 @@ class MinorFrameEncoder:
         self,
         packets: Sequence[StreamPacket],
         *,
-        irig_rate: int,
+        irig_rate: int = DEFAULT_ENCODER_RATE_HZ,
         row_id: int = 1,
         stage: int = 1,
         fields: Sequence[Field] | None = None,
@@ -92,9 +100,10 @@ class MinorFrameEncoder:
         self._stage = stage
         self._environ = environ
         self._fields = irig106_fields() if fields is None else tuple(fields)
-        _sf, _row, stream = require_irig_fields(self._fields)
-        self._stream_field = stream
-        self._stream_size = stream_nbytes(stream)
+        self._roles = require_irig_fields(self._fields)
+        self._stream_field = self._roles.packet_stream
+        self._stream_size = stream_nbytes(self._stream_field)
+        self._layout_len = len(flatten(self._fields))
         self.sequence = 0
         self.subframe_id = 0
         self._stream = bytearray()
@@ -114,6 +123,8 @@ class MinorFrameEncoder:
             self._row_id += 1
         built = bytearray()
         for packet in self._packets:
+            if not packet.send:
+                continue
             if frame_due(self.sequence, packet.packet_rate, self._irig_rate):
                 built += _INT32.pack(packet.packet_id)
                 built += bytes(packet.enc_size)
@@ -133,7 +144,11 @@ class MinorFrameEncoder:
         del self._stream[:take]
         padded = copied + bytes(self._stream_size - len(copied))
         stream_values = values_from_stream_bytes(self._stream_field, padded)
-        values: list[Value] = [self.subframe_id, self._row_id, *stream_values]
+        values: list[Value] = [0] * self._layout_len
+        values[self._roles.sf_index] = self.subframe_id
+        values[self._roles.row_index] = self._row_id
+        start = self._roles.stream_index
+        values[start : start + len(stream_values)] = stream_values
         payload = pack(self._fields, values)
         return EncodedMinorFrame(
             payload,
