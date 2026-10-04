@@ -13,6 +13,7 @@ are printed as a byte count only.
 from __future__ import annotations
 
 import argparse
+import select
 import socket
 import sys
 import time
@@ -93,7 +94,6 @@ def send_datagrams(
     sent = 0
     try:
         with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as sock:
-            sock.settimeout(0.01)
             for t_ms, datagram in iter_datagrams(packet_id, payload_size, rate_hz, count):
                 try:
                     sock.sendto(datagram, (host, port))
@@ -112,6 +112,8 @@ def send_datagrams(
 
 def _print_reply(sock: socket.socket) -> None:
     try:
+        if not select.select([sock], [], [], 0)[0]:
+            return
         data = sock.recv(65535)
     except TimeoutError:
         return
