@@ -501,6 +501,10 @@ async function addTest() {
     },
   });
   state.testId = created.id;
+  state.logPacketId = null;
+  state.logOffset = 0;
+  $("log").replaceChildren();
+  $("jobs").replaceChildren();
   $("test-name").value = "";
   await loadTests();
   setStatus("Added test " + created.name, false);
@@ -654,9 +658,35 @@ function signOut() {
   sessionStorage.removeItem(TOKEN_KEY);
   state.tree = [];
   state.selectedId = null;
+  state.testId = null;
+  state.logPacketId = null;
+  state.logOffset = 0;
+  clearPacketForm();
   clearFieldForm();
   clearDeviceForm();
   clearServerForm();
+  $("node-name").value = "";
+  $("node-icon").value = "1";
+  $("mapping-connection").value = "";
+  $("transform-name").value = "";
+  $("transform-expression").value = "";
+  $("test-name").value = "";
+  $("test-server").value = "";
+  $("packet-node").textContent = "Select a node in the tree.";
+  for (const id of [
+    "tree",
+    "fields",
+    "mappings",
+    "transformations",
+    "devices",
+    "servers",
+    "stream",
+    "tests",
+    "jobs",
+    "log",
+  ]) {
+    $(id).replaceChildren();
+  }
   $("workspace").hidden = true;
   $("sign-out").hidden = true;
   $("login").hidden = false;
