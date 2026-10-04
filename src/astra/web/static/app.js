@@ -490,6 +490,9 @@ function signOut() {
   sessionStorage.removeItem(TOKEN_KEY);
   state.tree = [];
   state.selectedId = null;
+  clearFieldForm();
+  clearDeviceForm();
+  clearServerForm();
   $("workspace").hidden = true;
   $("sign-out").hidden = true;
   $("login").hidden = false;
