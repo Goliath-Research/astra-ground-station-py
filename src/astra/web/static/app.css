@@ -60,6 +60,10 @@ main,
   padding: 0.9rem;
 }
 
+main {
+  min-width: 0;
+}
+
 aside,
 section[data-panel] {
   display: grid;
@@ -131,6 +135,12 @@ nav {
 #tree button.node[aria-current="true"] {
   background: #e7efe4;
   border-color: #243028;
+}
+
+#fields,
+#mappings,
+#log {
+  overflow-x: auto;
 }
 
 table {

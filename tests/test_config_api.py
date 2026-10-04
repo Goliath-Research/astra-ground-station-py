@@ -275,6 +275,100 @@ def test_tree_packet_fields_sizes_and_stream(
         _cleanup(database_url, root_id, None)
 
 
+def test_field_stores_description_sequence_and_transformation(
+    client: TestClient,
+    database_url: str,
+) -> None:
+    root_id: int | None = None
+    transform_id: int | None = None
+    _wipe_named_fixtures(database_url)
+    try:
+        vehicle = client.post("/api/tree", json={"name": "p6-vehicle", "icon_id": 1})
+        assert vehicle.status_code == 201
+        root_id = vehicle.json()["id"]
+        packet_node = client.post(
+            "/api/tree",
+            json={"name": "p6-r2l", "parent_id": root_id, "icon_id": 7},
+        )
+        assert packet_node.status_code == 201
+        node_id = packet_node.json()["id"]
+        with connect(database_url) as conn:
+            conn.execute(
+                """
+                INSERT INTO vartypes (id, name, scopeid, encsize, decsize)
+                VALUES (2, 'u8', %s, 8, 8)
+                ON CONFLICT (id) DO NOTHING
+                """,
+                (root_id,),
+            )
+            conn.commit()
+        saved = client.put(
+            f"/api/nodes/{node_id}/packet",
+            json={"packet_id": 910092, "name": "p6-r2l", "is_input": False},
+        )
+        assert saved.status_code == 200
+        record = client.post(
+            f"/api/scopes/{node_id}/vartypes",
+            json={"name": "p6-group", "description": "group desc", "short_name": "grp"},
+        )
+        assert record.status_code == 201
+        record_id = record.json()["id"]
+        assert record.json()["description"] == "group desc"
+        assert record.json()["short_name"] == "grp"
+        transform = client.post(
+            "/api/transformations",
+            json={"name": "p6-scale", "expression": "x * 0.1"},
+        )
+        assert transform.status_code == 201
+        transform_id = transform.json()["id"]
+        created = client.post(
+            f"/api/vartypes/{record_id}/fields",
+            json={
+                "name": "flags",
+                "type_id": 2,
+                "qty": 1,
+                "seq": 1,
+                "initial_value": "0",
+                "description": "scaled flag",
+                "short_name": "flg",
+                "override": False,
+                "in_sequence": True,
+                "transformation_id": transform_id,
+            },
+        )
+        assert created.status_code == 201
+        body = created.json()
+        assert body["var_type_id"] == record_id
+        assert body["description"] == "scaled flag"
+        assert body["short_name"] == "flg"
+        assert body["initial_value"] == "0"
+        assert body["in_sequence"] is True
+        assert body["transformation_id"] == transform_id
+        cleared = client.patch(
+            f"/api/fields/{body['id']}",
+            json={
+                "description": None,
+                "short_name": None,
+                "initial_value": None,
+                "in_sequence": False,
+                "transformation_id": None,
+            },
+        )
+        assert cleared.status_code == 200
+        blank = cleared.json()
+        assert blank["description"] is None
+        assert blank["short_name"] is None
+        assert blank["initial_value"] is None
+        assert blank["in_sequence"] is False
+        assert blank["transformation_id"] is None
+    finally:
+        _cleanup(database_url, root_id, None)
+        if transform_id is not None:
+            with connect(database_url) as conn:
+                conn.execute("DELETE FROM transformations WHERE id = %s", (transform_id,))
+                conn.commit()
+
+
 def test_deleting_a_vehicle_leaves_its_children(
     client: TestClient,
     database_url: str,
