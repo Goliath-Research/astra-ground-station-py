@@ -81,6 +81,44 @@ def test_encoder_builds_the_two_fixture_minor_frames() -> None:
     assert len(first.payload) == len(pack(irig106_fields(), [1, 1, 4, 3, 2, 1]))
 
 
+def test_next_build_cycle_advances_the_row_and_reassembles() -> None:
+    # Rate 200 is due at every sequence. Each cycle is an id plus 4 zero
+    # payload bytes, split across two minor frames. After the buffer drains,
+    # SubFrameID restarts at 1 on the next row. The same row with sf_id 1
+    # again would be a gap and PushStream would drop the later cycles.
+    encoder = MinorFrameEncoder(
+        (StreamPacket(16909060, 200, 4),),
+        irig_rate=200,
+        row_id=1,
+        stage=1,
+        environ={},
+    )
+    decoder = StageDecoder(1, {16909060: 4}, estimated_row_id=1, environ={})
+    frames = [encoder.tick() for _ in range(4)]
+    assert [(frame.sf_id, frame.row_id, frame.payload.hex()) for frame in frames] == [
+        (1, 1, "010100000004030201"),
+        (2, 1, "020100000000000000"),
+        (1, 2, "010200000004030201"),
+        (2, 2, "020200000000000000"),
+    ]
+    for frame in frames:
+        reassemble(frame.payload, decoder)
+    body = bytes.fromhex("0403020100000000")
+    assert [item.payload for item in decoder.forwarded] == [body, body]
+
+
+def test_same_row_subframe_restart_stays_a_gap() -> None:
+    decoder = StageDecoder(1, {16909060: 4}, estimated_row_id=1, environ={})
+    decoder.udp_read(bytes.fromhex("010100000004030201"))
+    decoder.udp_read(bytes.fromhex("020100000000000000"))
+    assert len(decoder.forwarded) == 1
+    decoder.udp_read(bytes.fromhex("010100000004030201"))
+    decoder.udp_read(bytes.fromhex("020100000000000000"))
+    assert len(decoder.forwarded) == 1
+    assert decoder.last_row_id == 1
+    assert decoder._skip_row is True
+
+
 def test_decoder_reassembles_the_fixture_stream() -> None:
     encoder = MinorFrameEncoder(
         (StreamPacket(16909060, 100, 4),),

@@ -69,9 +69,11 @@ class EncodedMinorFrame:
 class MinorFrameEncoder:
     """Build IRIG106 payloads the way ``Timer1Timer`` does.
 
-    ``row_id`` stays at the value given here. The two codec vectors keep it
-    at 1 across a continued stream, and the Delphi notes do not say when the
-    encoder advances the row.
+    One ``BuildPacketStream`` cycle is one major frame. ``SubFrameID`` goes
+    back to 1 when a drained stream is rebuilt, and ``row_id`` increments so
+    ``PushStream`` treats that restart as a new row. The first build keeps
+    the starting row. A non-empty ``PacketStream`` only increments
+    ``SubFrameID``, which is why the fixture's two frames both use row 1.
     """
 
     def __init__(
@@ -104,6 +106,12 @@ class MinorFrameEncoder:
         if self._stream:
             self.subframe_id += 1
             return
+        # PushStream opens a major frame only when row_id increases, and it
+        # accepts a subframe only when sf_id is last+1. Resetting SubFrameID
+        # to 1 on the same row is a gap, so a later cycle advances the row.
+        # subframe_id is still 0 until the first build, which keeps row_id.
+        if self.subframe_id != 0:
+            self._row_id += 1
         built = bytearray()
         for packet in self._packets:
             if frame_due(self.sequence, packet.packet_rate, self._irig_rate):

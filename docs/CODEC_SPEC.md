@@ -125,7 +125,12 @@ For each included packet the encoder appends a 4-byte signed little-endian
 id and `EncSize` zero bytes. Only the id is moved. If `PacketStream` still
 has bytes, `BuildPacketStream` only does `Inc(SubFrameID)` and returns.
 Otherwise it builds a new stream, then `Inc(Sequence)` (208), and
-`SubFrameID` becomes 1. `Sequence` is set to 0 at line 145.
+`SubFrameID` becomes 1. `Sequence` is set to 0 at line 145. That new build
+is the next major frame: `row_id` increments, except on the first build,
+which keeps the starting row. `PushStream` opens a major frame only when
+`row_id` increases, so the restarted `SubFrameID` of 1 has to arrive on a
+new row. The two fixture frames share row 1 because the second call only
+does `Inc(SubFrameID)`.
 
 `Timer1Timer` (212-276) copies `min(len(stream), len(packet_stream))` bytes
 into the field, zero-fills the rest, deletes the copied prefix (236-250),
