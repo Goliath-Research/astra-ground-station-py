@@ -1,9 +1,15 @@
 """Vehicle data types and the flat layout a later Mojo packer would take.
 
-Type ids and bit widths are ``TVehicleDataTypes`` in ``AstraVarPacket.pas``,
-as recorded in ``docs/MIGRATION.md``. The private Delphi sources were not
-readable while this module was written, so names of nested fields follow
-that description and are not a byte-level contract.
+Type ids and bit widths are ``TVehicleDataTypes`` in ``AstraVarPacket.pas``.
+Override bits are one bool each, appended after the whole flattened record.
+An array field contributes one override bit, not one per element. A nested
+record (type id > 100) is flattened in field order, and each element's own
+override bits stay at the end of that element. Arrays are packed back to
+back. Nested records and arrays are not padded to a byte boundary.
+
+Field names do not change the payload. ``CODEC_SPEC.md`` from
+astra-ground-station PR #6 was not on disk, so these comments do not cite
+Delphi line numbers.
 """
 
 from __future__ import annotations
@@ -89,10 +95,9 @@ def flatten(fields: Sequence[Field]) -> tuple[FlatField, ...]:
     """Return scalars in the order ``SaveValue`` then ``LoadFieldOvrs`` use.
 
     Inside one record the value bits come first, including each nested
-    record's own trailing override bits. This record's ``ovr_`` bits are
-    appended after those values. That is the reading of "after the real
-    fields" in the migration plan. It is not confirmed against
-    ``LoadFieldOvrs`` itself.
+    record's own trailing override bits, repeated once per array element.
+    This record's ``ovr_`` bits are one bool each, appended after that whole
+    record. An array gets one of those bits, not one per element.
     """
     values: list[FlatField] = []
     overrides: list[FlatField] = []

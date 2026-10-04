@@ -15,9 +15,14 @@ replaces OPC DA and NI shared variables. LabVIEW subscribes to tags the
 bridge publishes.
 
 The bit packer is a pure-Python reference in `astra.codec`. It does not
-import Mojo. The bridge, TMoIP reassembly, and exporter still idle until a
-signal; reassembly and export raise `NotImplementedError`. The web app is
-FastAPI and answers `GET /health` only.
+import Mojo. `TransformOutput` raises `NotImplementedError`: the polynomials
+were in astra-ground-station PR #6's `CODEC_SPEC.md`, and that file was not
+in this environment. Replacing an OPC Single/Double zero with `1e-7`
+(`substitute_opc_zero`) is separate and is not applied to the wire payload.
+The bridge, TMoIP reassembly, and exporter still idle until a signal;
+reassembly and export raise `NotImplementedError`. A minor frame can be
+built once `sf_id`, `row_id`, and `packet_stream` widths are supplied. The
+web app is FastAPI and answers `GET /health` only.
 
 ## License
 
@@ -37,7 +42,7 @@ fixtures/oracle/           Win64 harness output (empty until phase 0)
 fixtures/live/             later captures from the Linux host
 mojo/                      optional placeholder; Python does not import it
 src/astra/
-  codec/                   pure-Python bit packer; transforms not ported
+  codec/                   pure-Python bit packer; TransformOutput formulas not ported
   binlog/                  LOG-T*-I*.DAT layout (phase 1)
   db/                      psycopg access to config and testlog
   settings.py              ASTRA_BRIDGE_PORT and ASTRA_STAGE_COUNT
