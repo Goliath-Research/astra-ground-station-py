@@ -97,7 +97,7 @@ These are harnesses for the queue, not ground-station features. Leave them behin
 
 ### Third-party C: `AstraTMoIP/src`
 
-44 C/C++/header files, 16,200 lines. Irig106.org IRIG 106 Chapter 10 (BSD-style license in the file headers; the notice forbids using the Irig106.org name to endorse a derived product). Includes Chapter 10 packet I/O (`irig106ch10.c`), TMATS, PCM, analog, time, 1553, UART, Ethernet, CAN, ARINC 429, video, and a network-stream mode (`I106_READ_NET_STREAM` in the matching Delphi translation).
+44 C/C++/header files, 16,200 lines. This is [irig106lib](https://github.com/bbaggerman/irig106lib) (Bob Baggerman, Irig106.org), the IRIG 106 Chapter 10 C library. `LICENSE.txt` is BSD-3-Clause (copyright 2021 Irig106.org): source and binary redistribution are allowed when the copyright, conditions, and disclaimer stay with the software, and the Irig106.org name is not used to endorse a derived product. Includes Chapter 10 packet I/O (`irig106ch10.c`), TMATS, PCM, analog, time, 1553, UART, Ethernet, CAN, ARINC 429, video, and a network-stream mode (`I106_READ_NET_STREAM` in the matching Delphi translation). Question 16 keeps this C as is.
 
 Nothing in any `.dpr` compiles or links these files. `AstraTMoIP/IRIG106.pas` (302 lines) and `IRIG106Ch10.pas` (230 lines) are unfinished Delphi translations of the Chapter 10 header. No unit `uses` them. `IRIG106.pas` only accepts data type Ethernet format 0 and then stops. The live decoder never consults a Chapter 10 sync word (`0xEB25`). The UART format in that unused library is not a serial gateway; the hardware talks Serial-over-UDP directly (question 7).
 
@@ -127,7 +127,7 @@ Libraries, all free:
 | PostgreSQL | `psycopg` 3. SQLAlchemy 2 only inside the web app’s CRUD. The bridge and exporter should use SQL text, the same way FireDAC does |
 | Schema migrations on top of `database/postgres/` | `alembic` |
 | OPC UA server embedded in the bridge | `asyncua` |
-| Chapter 10 C, if it is ever called | `cffi` against a shared library built from `AstraTMoIP/src` |
+| Chapter 10, when a real capture exists | irig106lib (BSD-3-Clause) via `cffi` or `ctypes`. Unbuilt until then (question 16) |
 | Bit packer, once profiled | a Mojo module called from Python (see §3) |
 | Tests | `pytest` |
 | NI CSV / Simulink CSV / our own CSV | stdlib `csv` |
@@ -155,7 +155,7 @@ Do not port a `.dfm`. `AstraConfigurator/Main.dfm` and `AstraConfigurationManage
 | `AstraDevice` | `python -m astra.cli.device --packet-id --size --rate --host --port`. A bench tool, not a service |
 | `AstraConfigurationManager` + `dclDataModel` | Not ported. The EntityDAC tables are framework metadata and are not in the migrated schema (question 2, Oct 4, 2026). The schema in `database/` is the Configurator schema |
 | `TaskManager/QueueTest*`, `L2R_*`, `R2L_*`, `R2L2R` | Do not port. Their behavior is already inside `AstraCommon` |
-| `AstraTMoIP/src`, `IRIG106.pas`, `IRIG106Ch10.pas` | Do not rewrite. Keep the C tree in place for a later `cffi` build. Delete nothing in this planning step. The Delphi stubs are unused |
+| `AstraTMoIP/src`, `IRIG106.pas`, `IRIG106Ch10.pas` | Keep the C (irig106lib) as is for a later `cffi` or `ctypes` build. A Mojo port waits on a benchmark (question 16). The Delphi stubs are unused |
 
 ### Wire format the codec has to match
 
@@ -202,8 +202,10 @@ That is not a throughput problem for Python. It is a correctness problem (bit pa
 | Minor-frame reassembly (`PushBufferToPacket`, leftover bytes, drop until next `row_id`) | Byte copies and a dictionary of packet id → encoded size | Python `bytearray`. This is the logic most likely to be ported wrong; keep it readable |
 | DAT logging | One buffered write per packet | Python buffered file. Same layout as `TAstraBinLogFile` |
 | Bulk export of a long test | The only loop that runs flat out: read DAT, unpack, insert | Python unpack is the right default. If a multi-hour test is slow, this is the Mojo candidate: unpack a batch of records in one call, then `psycopg` `COPY` or `executemany`. The database insert will dominate unless the packer was ported as a per-bit Python loop |
-| Chapter 10 library (16,200 lines of C) | Not on the live path | **Keep the C.** A Mojo rewrite would re-implement TMATS, PCM, 1553, and checksums that already exist and are not called. If a future tool opens a real `.ch10` file, build `libirig106.so` and call it with `cffi`. Mojo is a poor fit there because the artifact to preserve is the existing C, not a numeric kernel |
+| Chapter 10 library (irig106lib, 16,200 lines of C) | Not on the live path | **Keep the C** (question 16). Call `libirig106.so` from Python with `cffi` or `ctypes` once a real Chapter 10 capture exists. A Mojo port happens only if benchmarks show an advantage. It stays unbuilt until that file exists |
 | OPC, SQL, the web app, tree editing | Waiting on the network | Python |
+
+**Chapter 10 stays irig106lib (question 16, Oct 4, 2026).** The copy under `AstraTMoIP/src` is that library. BSD-3-Clause fits this port: the ground-station service may ship the C sources or `libirig106.so` if the copyright, conditions, and disclaimer travel with them, and the product does not use the Irig106.org name as an endorsement. `gcc/Makefile` compiles with `gcc`, `-fPIC`, `-shared`, and no `-m32` or architecture flag, so the same sources build on linux/amd64 and linux/arm64. `i106_time.h` warns that its integer conversions are little-endian only. Both deployment architectures are little-endian, so that limit matches the hosts in §5. Python calls the shared library with `cffi` or `ctypes`. A Mojo port happens only if benchmarks show an advantage. Leave the library unbuilt until a real Chapter 10 capture file exists. `fixtures/live/` does not get an invented file.
 
 **Calling Mojo from Python.** Put the packer in its own Mojo package with a tiny surface (`unpack_records`, `pack_records`). Call it through the Python interop of the Mojo compiler in the pinned container (see §5): Python imports the Mojo module and calls those two functions. The import details have moved between Mojo releases and should be whatever that pin documents. Build that package on each deployment architecture. An x86_64 `.so` does not run on ARM64. Modular’s current requirements include Linux aarch64 (Ubuntu 22.04+, glibc 2.34+, Neoverse N1 / Graviton2 class or newer); §5 says what to do if the test-stand board is older than that, or if that pin’s Python import is missing on aarch64.
 
@@ -443,7 +445,7 @@ Deliberate deviations:
 - A link type is a one-character name plus a description. The table has no seed, so the page can add one.
 - A pin that a field still references cannot be deleted. `fields.connectionid` is `ON DELETE NO ACTION`, and the legacy delete trigger never runs in that case.
 
-The Chapter 10 C library stays unbuilt unless a real Chapter 10 file appears later. If it does, the test is `cffi` decode versus the upstream `irig106` tools on that file, on both architectures, not a rewrite.
+The Chapter 10 library is irig106lib and stays unbuilt until a real Chapter 10 capture file exists (question 16, Oct 4, 2026). When one does, build `libirig106.so` with the upstream GCC makefile and check a `cffi` or `ctypes` decode against the upstream tools on both linux/amd64 and linux/arm64. A Mojo port happens only if benchmarks show an advantage.
 
 ## 7. Risks and open questions
 
@@ -465,7 +467,7 @@ Risks that are visible from this tree:
 - **Secrets.** `sa`, `CHANGE_ME`, design-time host `opc.astraspace.com`, and `Servers.Password`. None of that should be copied into PostgreSQL seed data or the new repo.
 - **Mojo’s Python import is SDK-specific.** The compiler pin is the multi-arch container in §5 (`modular/max-nvidia-base:26.6.0`, Mojo 1.1.0), not a pip install. If that pin’s Python import cannot be shipped on one architecture, that architecture uses the Python or C ABI packer (§3, §5). The codec’s behavior does not depend on Mojo. An ARM board older than Neoverse N1 is outside the SDK’s stated host CPU.
 - **Mojo’s license allows free use; it is not an open-source license.** Confirm the community terms still cover shipping a ground-station service to the client before the packer is linked into a release build. The Python service runs without it until then.
-- **Chapter 10 is a trap.** It looks like the telemetry stack and it is 16,200 lines. The running telemetry stack is `AstraDecoder.pas` plus a database row named `IRIG106`.
+- **The live telemetry path is `AstraDecoder.pas` plus a database row named `IRIG106`.** The 16,200-line C tree is irig106lib and stays unbuilt (question 16).
 
 Open questions for David:
 
@@ -484,3 +486,4 @@ Open questions for David:
 13. **Resolved (Oct 4, 2026).** `AstraConfigurationManager` and the EntityDAC tables stay out. The editor is the configurator hardware tree, and its tests use the real Access pinout and configurator rows (question 2).
 14. **Resolved.** The services run on Linux, probably Ubuntu, on x86_64 and possibly ARM64. LabVIEW is an OPC UA client of the bridge. Wheel, Mojo SDK, endianness, and CI consequences are in §5.
 15. **Compiler pin resolved.** Local builds and CI use `modular/max-nvidia-base:26.6.0` (manifest list `sha256:53a1f0b502e67f400b0bc3c4575fde73f84d468ea03b977eaad2ef6fcd303c31`), which ships Mojo 1.1.0 for linux/amd64 and linux/arm64. Still open: does the community license cover deploying a Mojo packer inside the service at the client site? The Python service runs without Mojo until that is confirmed.
+16. **Resolved (Oct 4, 2026).** The Chapter 10 library stays open-source C, kept as is, and is called from Python with `cffi` or `ctypes`. The library is [irig106lib](https://github.com/bbaggerman/irig106lib) (BSD-3-Clause). `gcc/Makefile` builds `libirig106.so` with GCC and `-fPIC` and no CPU-specific flags. `i106_time.h` is little-endian only, which matches Linux x86_64 and ARM64 (aarch64). A Mojo port happens only if benchmarks show an advantage. The library stays unbuilt until a real Chapter 10 capture file exists. See §1 and §3.
