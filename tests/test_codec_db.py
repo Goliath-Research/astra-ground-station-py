@@ -231,6 +231,16 @@ def test_null_seq_sorts_before_zero_and_names_fold_case() -> None:
     assert _sort_tree(irig106_fields()) == irig106_fields()
 
 
+def test_real_tree_packet_nodes_cover_the_codec_census() -> None:
+    """Configurator packet nodes in the hardware extract name every codec packet."""
+    boards = Path(__file__).resolve().parent / "fixtures" / "hardware" / "real_boards.json"
+    loaded = json.loads(boards.read_text(encoding="utf-8"))
+    nodes = loaded["treeversions"]
+    names = {row["name"] for row in nodes if row["iconid"] in (6, 7)}
+    census = {name for _, name, _, _, _, _ in _PACKET_SIZES}
+    assert census <= names
+
+
 def test_legacy_opc_name_and_port_match_the_server_row() -> None:
     assert LEGACY_OPC_DA_SERVER == "National Instruments.Variable Engine.1"
     assert DEFAULT_BRIDGE_PORT == 2357
