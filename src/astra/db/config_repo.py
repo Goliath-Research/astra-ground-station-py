@@ -349,9 +349,28 @@ class ConfigRepo:
         return updated
 
     def delete_node(self, node_id: int) -> None:
-        if self.node(node_id) is None:
+        node = self.node(node_id)
+        if node is None:
             raise ConfigError("not_found")
-        # Icon 1 is this row only. spdelete walks children for icons 2-10.
+        # devices.smartnodeid is not removed by spdelete. Clear devices on the
+        # rows that call will delete, or the foreign key rejects it. Icon 1 is
+        # that row only; icons 2-10 walk children inside spdelete.
+        if node["icon_id"] == ICON_VEHICLE:
+            self._exec("DELETE FROM devices WHERE smartnodeid = %s", (node_id,))
+        else:
+            self._exec(
+                """
+                WITH RECURSIVE nodes AS (
+                    SELECT id FROM treeversions WHERE id = %s
+                    UNION ALL
+                    SELECT child.id
+                    FROM treeversions AS child
+                    INNER JOIN nodes ON child.parentid = nodes.id
+                )
+                DELETE FROM devices WHERE smartnodeid IN (SELECT id FROM nodes)
+                """,
+                (node_id,),
+            )
         self._exec("SELECT spdelete(%s)", (node_id,))
 
     def duplicate_node(self, source_id: int) -> dict[str, Any]:

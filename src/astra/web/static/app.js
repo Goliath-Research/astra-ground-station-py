@@ -116,7 +116,7 @@ async function reloadTree() {
 
 async function selectNode(nodeId) {
   state.selectedId = nodeId;
-  state.fieldId = null;
+  clearFieldForm();
   renderTree();
   const node = selectedNode();
   if (node) {

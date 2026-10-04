@@ -344,6 +344,66 @@ def test_moving_a_vehicle_resequences_sibling_roots(
             _cleanup(database_url, root_id, None)
 
 
+def test_deleting_a_node_removes_devices_on_its_smart_nodes(
+    client: TestClient,
+    database_url: str,
+) -> None:
+    root_id: int | None = None
+    _wipe_named_fixtures(database_url)
+    try:
+        vehicle = client.post("/api/tree", json={"name": "p6-vehicle", "icon_id": 1})
+        assert vehicle.status_code == 201
+        root_id = vehicle.json()["id"]
+        smart = client.post(
+            "/api/tree",
+            json={"name": "p6-smart", "parent_id": root_id, "icon_id": 5},
+        )
+        assert smart.status_code == 201
+        smart_id = smart.json()["id"]
+        device = client.post(
+            "/api/devices",
+            json={"name": "p6-device", "smart_node_id": smart_id, "ipv4": "127.0.0.1"},
+        )
+        assert device.status_code == 201
+        device_id = device.json()["id"]
+
+        removed_smart = client.delete(f"/api/tree/{smart_id}")
+        assert removed_smart.status_code == 204
+        devices = client.get("/api/devices")
+        assert devices.status_code == 200
+        assert all(row["id"] != device_id for row in devices.json())
+        names = [row["name"] for row in client.get("/api/tree").json()]
+        assert "p6-smart" not in names
+        assert "p6-vehicle" in names
+
+        smart = client.post(
+            "/api/tree",
+            json={"name": "p6-smart", "parent_id": root_id, "icon_id": 5},
+        )
+        assert smart.status_code == 201
+        smart_id = smart.json()["id"]
+        device = client.post(
+            "/api/devices",
+            json={
+                "name": "p6-device",
+                "smart_node_id": smart_id,
+                "ipv4": "127.0.0.1",
+            },
+        )
+        assert device.status_code == 201
+        device_id = device.json()["id"]
+        removed = client.delete(f"/api/tree/{root_id}")
+        assert removed.status_code == 204
+        root_id = smart_id
+        names = [row["name"] for row in client.get("/api/tree").json()]
+        assert "p6-vehicle" not in names
+        assert "p6-smart" in names
+        devices = client.get("/api/devices")
+        assert any(row["id"] == device_id for row in devices.json())
+    finally:
+        _cleanup(database_url, root_id, None)
+
+
 def test_create_seq_is_a_sibling_position(client: TestClient, database_url: str) -> None:
     root_id: int | None = None
     _wipe_named_fixtures(database_url)
