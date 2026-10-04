@@ -1,13 +1,14 @@
 """LSB-first unsigned bit packer for the Mojo toolchain smoke test.
 
 Python ``astra.codec`` is still the packer the service calls. This module is
-the small kernel CI compiles with Modular's published Mojo image. Out-of-range
-integers keep the low bits of the field width, matching the default
-``pack(..., overflow="wrap")``.
+the small kernel CI compiles with Modular's published Mojo image. The default
+saturates each unsigned field to its width, the same rule as
+``pack(..., overflow="clip")``. ``overflow="wrap"`` keeps the low bits and is
+how the transcribed vector ``u8_out_of_range_wraps`` (300 as ``u8`` is ``2c``)
+stays verifiable.
 
-The byte checks in ``test_bitpack.mojo`` are the transcribed vectors ``u8``,
-``u12``, ``u12_after_bool``, and ``u8_out_of_range_wraps`` from
-``tests/data/codec_vectors.json``.
+The other byte checks are the in-range vectors ``u8``, ``u12``, and
+``u12_after_bool`` from ``tests/data/codec_vectors.json``.
 """
 
 from std.collections import Array
@@ -16,25 +17,57 @@ comptime PACK_BYTES = 8
 comptime PACK_BITS = PACK_BYTES * 8
 
 
+def clip_unsigned(value: Int, width: Int) -> Int:
+    """Clamp ``value`` to ``[0, 2**width - 1]``."""
+    var limit = (1 << width) - 1
+    if value < 0:
+        return 0
+    if value > limit:
+        return limit
+    return value
+
+
 def low_bits(value: Int, width: Int) -> Int:
-    """Keep the low ``width`` bits of ``value``."""
+    """Keep the low ``width`` bits. This is the legacy wrap mode."""
     return value & ((1 << width) - 1)
 
 
+def clip_bool(value: Int) -> Int:
+    """Clamp a bool field: zero stays zero, every other integer becomes one."""
+    if value == 0:
+        return 0
+    return 1
+
+
 def bool_bit(value: Int) -> Int:
-    """Bool fields keep the low bit. Two becomes zero; three becomes one."""
+    """Legacy bool wrap: keep the low bit. Two becomes zero; three becomes one."""
     return value & 1
+
+
+def _field_bits(value: Int, width: Int, overflow: String) raises -> Int:
+    if overflow == "clip":
+        return clip_unsigned(value, width)
+    if overflow == "wrap":
+        return low_bits(value, width)
+    raise Error("overflow must be clip or wrap")
 
 
 def pack_fields[
     n: Int
-](widths: Array[Int, n], values: Array[Int, n]) raises -> Array[UInt8, PACK_BYTES]:
-    """Pack ``n`` unsigned fields, LSB first, into a zeroed 8-byte buffer."""
+](
+    widths: Array[Int, n],
+    values: Array[Int, n],
+    overflow: String = "clip",
+) raises -> Array[UInt8, PACK_BYTES]:
+    """Pack ``n`` unsigned fields, LSB first, into a zeroed 8-byte buffer.
+
+    ``overflow`` defaults to ``clip``. Pass ``"wrap"`` to keep the low bits.
+    """
     var out = Array[UInt8, PACK_BYTES](fill=UInt8(0))
     var cursor = 0
     for i in range(n):
         var width = widths[i]
-        var bits = low_bits(values[i], width)
+        var bits = _field_bits(values[i], width, overflow)
         for bit in range(width):
             if cursor >= PACK_BITS:
                 raise Error("pack buffer is 8 bytes")
