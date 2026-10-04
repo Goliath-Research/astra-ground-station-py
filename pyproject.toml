@@ -7,6 +7,8 @@ name = "astra-ground-station"
 dynamic = ["version"]
 description = "Private Python/Mojo port of the Astra ground-station software."
 readme = "README.md"
+license = "MIT"
+license-files = ["LICENSE"]
 requires-python = ">=3.12"
 authors = [{ name = "David Izada Rodriguez", email = "davidizadar@GoliathResearch.com" }]
 dependencies = [

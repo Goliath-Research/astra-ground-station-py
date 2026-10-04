@@ -20,8 +20,11 @@ until a signal. `pack`, `unpack`, reassembly, and export raise
 
 ## License
 
-No license has been chosen. This repository is private. All rights reserved.
-Do not copy or redistribute it. There is no `LICENSE` file until one is chosen.
+Licensed under the MIT License. Copyright 2026 Goliath Research. See
+[LICENSE](LICENSE).
+
+The GitHub repository stays private. MIT covers people who have a copy of
+the code. It does not publish the repository.
 
 ## Layout
 
@@ -161,5 +164,4 @@ keyed by `(test id, packet id)`; `intf_id` is a generated UUID.
 
 Unresolved questions are in `docs/MIGRATION.md` §7 (EntityDAC hardware editor,
 `TransformInput`, decoder counters, the historical OPC DA server name,
-LabVIEW cutover owner, Mojo license for a client install). The license for
-this repository is also still unchosen.
+LabVIEW cutover owner, Mojo license for a client install).
