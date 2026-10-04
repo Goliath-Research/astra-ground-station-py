@@ -297,6 +297,11 @@ async function loadFields() {
     host.textContent = "Select a packet node.";
     return;
   }
+  if (!state.packet) {
+    fillRecordSelect([]);
+    host.textContent = "Save a packet on the selected node before editing fields.";
+    return;
+  }
   const types = await api("/api/scopes/" + state.selectedId + "/vartypes");
   const transforms = await api("/api/transformations");
   fillTypeSelect(types);
@@ -311,10 +316,6 @@ async function loadFields() {
     records.push(row);
   }
   fillRecordSelect(records);
-  if (!state.packet && records.length === 0) {
-    host.textContent = "Save a packet on the selected node before editing fields.";
-    return;
-  }
   const fields = [];
   for (const record of records) {
     const rows = await api("/api/vartypes/" + record.id + "/fields");
@@ -1021,6 +1022,10 @@ function fieldEditorBody() {
 async function saveField() {
   if (state.selectedId === null) {
     setStatus("Select a packet node first.", true);
+    return;
+  }
+  if (!state.packet) {
+    setStatus("Save a packet first.", true);
     return;
   }
   const recordId = Number($("field-record").value);
