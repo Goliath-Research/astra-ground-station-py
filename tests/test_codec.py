@@ -1,25 +1,30 @@
-"""Golden payloads derived from the migration plan's description of the codec.
+"""Golden payloads for the packer.
 
-The private repo ``Goliath-Research/astra-ground-station`` was not readable
-from this environment (GitHub returns 404), so these vectors were not
-produced by ``SavePacket``. Each test names the Delphi routine the plan
-says implements that case, and the expected bytes are calculated from
-that description.
-
-Provenance used throughout:
+``CODEC_SPEC.md`` and ``codec_vectors.json`` from astra-ground-station PR #6
+were not on disk, so the 29 source-verified vectors were not loaded and
+these tests do not cite Delphi line numbers. The expected bytes follow the
+rules that spec was described as stating, named by unit and routine:
 
 - ``AstraVarPacket.pas`` ``TBitStream.SaveBit`` / ``SavePacket``: zero the
-  buffer, then OR bit 0 of the value into the next LSB.
-- ``AstraVarPacket.pas`` ``TVehicleDataType.SaveValue`` / ``LoadValue``:
-  stream the little-endian bits of the in-memory variable. Q types are
-  not shifted.
-- ``AstraVarPacket.pas`` ``LoadFieldOvrs``: override bits are appended
-  after the record's value bits. One bit per field row, not per array
-  element (``spcalcvartypesizes`` counts rows).
-- ``AstraNetPacket.pas`` ``GetIdPayload`` / ``SetIdPayload`` and
-  ``GetDeviceT_MS``: signed 32-bit little-endian.
+  buffer, then concatenate fields with no padding. LSB first within a byte,
+  little-endian across bytes. ``u12`` ``0x0ABC`` is ``bc0a``; the same value
+  after a true bool is ``7915``.
+- ``AstraVarPacket.pas`` ``SaveValue``: out-of-range integers keep the low
+  bits (300 as ``u8`` is ``2c``). Null becomes 0. Q types are the raw
+  integer (``i32q8`` 256 stays 256). ``f32`` / ``f64`` are IEEE-754,
+  including NaN.
+- ``AstraVarPacket.pas`` ``LoadFieldOvrs``: one ``ovr_`` bool per field,
+  appended after the whole flattened record. An array gets one override
+  bit, not one per element. Nested records (type id > 100) flatten in
+  field order; each element's own override bits stay with that element.
+- ``AstraNetPacket.pas`` ``GetIdPayload`` and ``GetDeviceT_MS``: a datagram
+  is a signed int32 little-endian packet id plus the payload. ``t_ms`` is
+  the first four payload bytes. No checksum.
+- ``AstraInpPopper.pas`` ``SyncWrite``: ``0`` becomes ``1e-7`` for OPC
+  Single/Double only. That substitution is not on the wire.
 """
 
+import math
 import struct
 
 import pytest
@@ -62,10 +67,18 @@ def test_u8_is_one_byte() -> None:
 
 
 def test_u12_aligned_is_little_endian_low_twelve_bits() -> None:
-    # 0xABC, SaveValue of a word, 12 bits. Low byte 0xBC, high nibble 0xA.
+    # SavePacket of u12 0x0ABC, no leading bits. Low byte 0xBC, high nibble 0xA.
     fields = (Field("sample", 3),)
-    assert pack(fields, [0xABC]) == bytes.fromhex("bc0a")
+    assert pack(fields, [0x0ABC]) == bytes.fromhex("bc0a")
     assert unpack(fields, bytes.fromhex("bc0a")) == (0xABC,)
+
+
+def test_u12_0xabc_after_a_true_bool() -> None:
+    # SavePacket concatenates with no pad. bool true, then u12 0x0ABC.
+    # byte0 bits 0..7 = 1,0,0,1,1,1,1,0 = 0x79. byte1 = 0x15.
+    fields = (Field("flag", 1), Field("sample", 3))
+    assert pack(fields, [True, 0x0ABC]) == bytes.fromhex("7915")
+    assert unpack(fields, bytes.fromhex("7915")) == (True, 0xABC)
 
 
 def test_u12_at_bit_offset_4() -> None:
@@ -109,8 +122,8 @@ def test_signed_integers_are_twos_complement() -> None:
 
 
 def test_q_types_are_not_shifted() -> None:
-    # LoadValue / SaveValue store the raw integer. 256 in i32q16 stays 256,
-    # not 256 << 16.
+    # SaveValue stores the raw integer. i32q8 value 256 is the integer 256.
+    assert pack((Field("q", 11),), [256]) == bytes.fromhex("00010000")
     assert pack((Field("q", 12),), [256]) == bytes.fromhex("00010000")
     assert pack((Field("q", 11),), [-2]) == bytes.fromhex("feffffff")
     assert pack((Field("q", 13),), [0xFF]) == b"\xff"
@@ -122,6 +135,19 @@ def test_f32_and_f64_are_ieee754_little_endian() -> None:
     assert pack((Field("x", 9),), [1.0]) == struct.pack("<f", 1.0)
     assert pack((Field("x", 10),), [-0.0]) == struct.pack("<d", -0.0)
     assert unpack((Field("x", 10),), struct.pack("<d", -0.0)) == (-0.0,)
+    # A wire zero stays zero. SyncWrite's 1e-7 substitution is not applied.
+    assert pack((Field("x", 10),), [0.0]) == b"\x00" * 8
+
+
+def test_nan_payloads_are_ieee754() -> None:
+    nan32 = struct.pack("<f", float("nan"))
+    restored32 = unpack((Field("x", 9),), nan32)
+    assert pack((Field("x", 9),), [float("nan")]) == nan32
+    assert isinstance(restored32[0], float) and math.isnan(restored32[0])
+    nan64 = struct.pack("<d", float("nan"))
+    restored64 = unpack((Field("x", 10),), nan64)
+    assert pack((Field("x", 10),), [float("nan")]) == nan64
+    assert isinstance(restored64[0], float) and math.isnan(restored64[0])
 
 
 def test_bool_and_u8_share_bytes() -> None:
@@ -168,6 +194,26 @@ def test_nested_record_is_packed_inline_without_a_byte_pad() -> None:
     assert names == ["rec_a", "rec_flag", "c"]
 
 
+def test_array_of_nested_records_keeps_each_elements_override() -> None:
+    # qty does not byte-align elements. Each element ends with its own ovr bit.
+    nested = Field("rec", 200, qty=2, fields=(Field("x", 2, override=True),))
+    assert [item.name for item in flatten((nested,))] == [
+        "rec_0_x",
+        "ovr_rec_0_x",
+        "rec_1_x",
+        "ovr_rec_1_x",
+    ]
+    payload = pack((nested,), [0x01, False, 0x02, True])
+    assert payload == bytes.fromhex("010402")
+    assert unpack((nested,), payload) == (0x01, False, 0x02, True)
+
+
+def test_nested_array_has_one_override_bit() -> None:
+    nested = Field("rec", 200, qty=2, override=True, fields=(Field("x", 2),))
+    assert [item.name for item in flatten((nested,))] == ["rec_0_x", "rec_1_x", "ovr_rec"]
+    assert pack((nested,), [0x11, 0x22, True]) == bytes.fromhex("112201")
+
+
 def test_nested_override_stays_inside_the_child() -> None:
     # Child LoadFieldOvrs runs before the parent continues. x = 0,
     # ovr = 1, then the parent has no further fields. 8 zero bits + 1.
@@ -191,15 +237,38 @@ def test_id_payload_is_a_signed_little_endian_integer() -> None:
     assert unpack_id_payload(pack_id_payload(-1, b""))[0] == -1
 
 
-def test_out_of_range_and_short_buffers_are_rejected() -> None:
-    with pytest.raises(CodecError):
-        pack((Field("sample", 3),), [0x1000])
+def test_out_of_range_integers_keep_the_low_bits() -> None:
+    # 300 = 0x12C. SaveValue keeps the low 8 bits: 0x2C.
+    assert pack((Field("b", 2),), [300]) == bytes.fromhex("2c")
+    assert unpack((Field("b", 2),), bytes.fromhex("2c")) == (0x2C,)
+    # 0x1000 keeps the low 12 bits, which are zero.
+    assert pack((Field("sample", 3),), [0x1000]) == bytes.fromhex("0000")
+    # -200 as i8 keeps 0x38. The sign bit is clear, so unpack is +56.
+    assert pack((Field("b", 6),), [-200]) == bytes.fromhex("38")
+    assert unpack((Field("b", 6),), bytes.fromhex("38")) == (56,)
+    # A bool field is one bit. 3 keeps the low bit.
+    assert pack((Field("flag", 1),), [3]) == b"\x01"
+    assert pack((Field("flag", 1),), [2]) == b"\x00"
+
+
+def test_null_packs_as_zero() -> None:
+    assert pack((Field("b", 2),), [None]) == b"\x00"
+    assert pack((Field("flag", 1),), [None]) == b"\x00"
+    assert unpack((Field("flag", 1),), pack((Field("flag", 1),), [None])) == (False,)
+    assert pack((Field("x", 9),), [None]) == struct.pack("<f", 0.0)
+    assert pack((Field("x", 10),), [None]) == struct.pack("<d", 0.0)
+    assert pack((Field("q", 11),), [None]) == b"\x00" * 4
+
+
+def test_short_buffers_and_oversized_packet_ids_are_rejected() -> None:
     with pytest.raises(CodecError):
         unpack((Field("b", 2),), b"")
     with pytest.raises(CodecError):
         pack_id_payload(0x80000000, b"")
     with pytest.raises(CodecError):
         device_t_ms(b"\x00\x00")
+    with pytest.raises(CodecError):
+        pack((Field("b", 2),), [True])
 
 
 def test_empty_layout_is_empty() -> None:
