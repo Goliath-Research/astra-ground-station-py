@@ -477,6 +477,20 @@ class ConfigRepo:
                 combined.append(row)
         return [_mapping(row) for row in combined]
 
+    def interface_node_id(self, stage: str, node: str, packet: str) -> int:
+        """Resolve a packet node with ``spgetnodeid``.
+
+        The names are the stage, the smart node, and the packet node. The
+        procedure keeps the newest version and release when more than one match.
+        """
+        row = self._one(
+            "SELECT nodeid FROM spgetnodeid(%s, %s, %s)",
+            (stage, node, packet),
+        )
+        if row is None or not isinstance(row["nodeid"], int):
+            raise ConfigError("not_found")
+        return row["nodeid"]
+
     def interface_rows(self, node_id: int) -> list[dict[str, Any]]:
         """Rows from ``spgetinterface``, in the procedure's column order."""
         if self.node(node_id) is None:
