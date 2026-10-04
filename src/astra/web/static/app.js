@@ -210,7 +210,15 @@ async function loadFields() {
     return;
   }
   const types = await api("/api/scopes/" + state.selectedId + "/vartypes");
-  const records = types.filter((row) => row.scope_id === state.selectedId);
+  const seen = new Set();
+  const records = [];
+  for (const row of types) {
+    if (row.scope_id !== state.selectedId || seen.has(row.id)) {
+      continue;
+    }
+    seen.add(row.id);
+    records.push(row);
+  }
   const fields = [];
   for (const record of records) {
     const rows = await api("/api/vartypes/" + record.id + "/fields");
