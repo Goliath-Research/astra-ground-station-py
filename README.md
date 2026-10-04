@@ -25,7 +25,11 @@ The web app is FastAPI. `GET /health` and `GET /` are open. `/` is the
 configurator (tree, packet, fields, mappings, transformations, devices,
 servers, and Send/Rate). `/api` requires `ASTRA_WEB_TOKEN`. Server passwords
 are write-only. Tree duplicate and pin mappings call `spduplicate`,
-`spaddmapping`, and `spdelmapping`.
+`spaddmapping`, and `spdelmapping`. Simulink and mapping downloads are
+`;`-delimited CSV from `spgetinterface` and `spgetmappingwithorders`.
+The LabVIEW download is the OPC UA node list `Astra{packet}/{field}`.
+A finished test job can page `testlog.{packet}_{test}` and download it as
+the same `;` CSV. The log stays closed until `jobs.done` is true.
 
 ## License
 
