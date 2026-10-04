@@ -1,13 +1,32 @@
 """Bench device simulator. No database and no production capture."""
 
+import json
 import socket
 import struct
 import time
+from pathlib import Path
 
 import pytest
 
 from astra.cli.device import _drain_replies, iter_datagrams, main, synthetic_datagram, timer_step_ms
 from astra.codec.framing import unpack_id_payload
+
+
+def test_real_pin_is_a_legal_bench_timestamp() -> None:
+    """Stage 1 R2L is packet id 2. TOR1's pin number is a legal ``t_ms``."""
+    boards = Path(__file__).resolve().parent / "fixtures" / "hardware" / "real_boards.json"
+    loaded = json.loads(boards.read_text(encoding="utf-8"))
+    pin = next(
+        row
+        for row in loaded["connections"]
+        if row["boardid"] == 6333 and row["shortname"] == "TOR1"
+    )
+    t_ms = pin["firstpin"]
+    assert isinstance(t_ms, int)
+    datagram = synthetic_datagram(2, 8, t_ms)
+    packet_id, payload = unpack_id_payload(datagram)
+    assert packet_id == 2
+    assert struct.unpack_from("<i", payload)[0] == t_ms
 
 
 def test_timer_step_follows_the_rate() -> None:
