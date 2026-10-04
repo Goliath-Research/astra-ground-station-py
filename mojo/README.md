@@ -1,10 +1,12 @@
 # Optional Mojo placeholder
 
 The migration keeps the bit packer in Python until a profile says otherwise.
-The Mojo surface, if it is added, is `pack_records` and `unpack_records`: a
-flat layout of bit width and kind, plus a bytes buffer. It does not open
-sockets, import asyncua, or call PostgreSQL. Mojo is free to use; this
-project does not require the compiler to be open source.
+That reference is `astra.codec.pack_flat` / `unpack_flat`: a flat layout of
+`(bit_width, kind)` plus the values or the payload bytes. The Mojo surface,
+if it is added, is `pack_records` and `unpack_records` with the same shape.
+It does not open sockets, import asyncua, or call PostgreSQL. The Python
+package does not import Mojo. Mojo is free to use; this project does not
+require the compiler to be open source.
 
 Pinned SDK for both architectures: **Mojo 1.1.0**. An x86_64 build does not
 run on ARM64. If that pin cannot be installed or started on a machine, the

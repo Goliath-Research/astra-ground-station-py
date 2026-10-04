@@ -14,9 +14,10 @@ PostgreSQL replaces SQL Server. OPC UA (asyncua), inside the bridge process,
 replaces OPC DA and NI shared variables. LabVIEW subscribes to tags the
 bridge publishes.
 
-No business logic is ported yet. The bridge, TMoIP decoder, and exporter idle
-until a signal. `pack`, `unpack`, reassembly, and export raise
-`NotImplementedError`. The web app is FastAPI and answers `GET /health` only.
+The bit packer is a pure-Python reference in `astra.codec`. It does not
+import Mojo. The bridge, TMoIP reassembly, and exporter still idle until a
+signal; reassembly and export raise `NotImplementedError`. The web app is
+FastAPI and answers `GET /health` only.
 
 ## License
 
@@ -36,7 +37,7 @@ fixtures/oracle/           Win64 harness output (empty until phase 0)
 fixtures/live/             later captures from the Linux host
 mojo/                      optional placeholder; Python does not import it
 src/astra/
-  codec/                   bit packer and transforms (phase 1)
+  codec/                   pure-Python bit packer; transforms not ported
   binlog/                  LOG-T*-I*.DAT layout (phase 1)
   db/                      psycopg access to config and testlog
   settings.py              ASTRA_BRIDGE_PORT and ASTRA_STAGE_COUNT

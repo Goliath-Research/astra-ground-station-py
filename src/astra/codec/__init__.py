@@ -1,28 +1,56 @@
-"""Field layout, bit pack/unpack, and transforms.
+"""Field layout and the pure-Python bit packer.
 
-Phase 1 of the migration. ``pack`` and ``unpack`` are not implemented.
-The wire format is the little-endian bit packer in ``AstraVarPacket.pas``,
-not a length-prefixed blob.
+``pack`` / ``unpack`` follow ``TVehicleDataType.SaveValue`` and ``LoadValue``
+over ``TBitStream``, as described in ``docs/MIGRATION.md``. Mojo is not
+imported. ``ASTRA_NATIVE_BACKEND=mojo`` is rejected until ``pack_records``
+exists; the flat ``(bit_width, kind)`` layout is the surface that function
+would take.
 """
 
 from collections.abc import Sequence
 
+from astra.codec.errors import CodecError
+from astra.codec.framing import device_t_ms, pack_id_payload, unpack_id_payload
+from astra.codec.python_pack import Value, pack_flat, unpack_flat
+from astra.codec.types import (
+    TYPE_NAMES,
+    TYPE_WIDTH,
+    Field,
+    FlatField,
+    encoded_size,
+    flatten,
+)
+from astra.native import active_backend
 
-def pack(values: Sequence[object]) -> bytes:
-    """Pack field values into a payload.
+__all__ = [
+    "TYPE_NAMES",
+    "TYPE_WIDTH",
+    "CodecError",
+    "Field",
+    "FlatField",
+    "Value",
+    "device_t_ms",
+    "encoded_size",
+    "flatten",
+    "pack",
+    "pack_flat",
+    "pack_id_payload",
+    "unpack",
+    "unpack_flat",
+    "unpack_id_payload",
+]
 
-    Raises:
-        NotImplementedError: always, until phase 1.
+
+def pack(fields: Sequence[Field], values: Sequence[Value]) -> bytes:
+    """Pack ``values`` for ``fields`` into a payload.
+
+    The buffer is cleared first. Unused bits in the last byte stay zero.
     """
-    del values
-    raise NotImplementedError("codec pack is not ported")
+    active_backend()
+    return pack_flat(flatten(fields), values)
 
 
-def unpack(payload: bytes) -> tuple[object, ...]:
-    """Unpack a payload into field values.
-
-    Raises:
-        NotImplementedError: always, until phase 1.
-    """
-    del payload
-    raise NotImplementedError("codec unpack is not ported")
+def unpack(fields: Sequence[Field], payload: bytes) -> tuple[Value, ...]:
+    """Unpack ``payload`` into one value per flattened scalar."""
+    active_backend()
+    return unpack_flat(flatten(fields), payload)
