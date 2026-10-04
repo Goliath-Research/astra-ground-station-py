@@ -446,6 +446,18 @@ class ConfigRepo:
                 combined.append(row)
         return [_mapping(row) for row in combined]
 
+    def interface_rows(self, node_id: int) -> list[dict[str, Any]]:
+        """Rows from ``spgetinterface``, in the procedure's column order."""
+        if self.node(node_id) is None:
+            raise ConfigError("not_found")
+        return self._fetch("SELECT * FROM spgetinterface(%s)", (node_id,))
+
+    def mapping_rows(self, node_id: int) -> list[dict[str, Any]]:
+        """Rows from ``spgetmappingwithorders``, in the procedure's column order."""
+        if self.node(node_id) is None:
+            raise ConfigError("not_found")
+        return self._fetch("SELECT * FROM spgetmappingwithorders(%s)", (node_id,))
+
     def packet(self, node_id: int) -> dict[str, Any] | None:
         row = self._one(
             "SELECT packetid, packetname, isinput FROM spgetpacket(%s)",

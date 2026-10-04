@@ -544,6 +544,38 @@ async function moveNode(direction) {
   await selectNode(node.id);
 }
 
+async function downloadExport(kind, filename) {
+  const node = selectedNode();
+  if (!node) {
+    setStatus("Select a node first.", true);
+    return;
+  }
+  const token = sessionStorage.getItem(TOKEN_KEY);
+  const response = await fetch("/api/nodes/" + node.id + "/exports/" + kind, {
+    headers: token ? { Authorization: "Bearer " + token } : {},
+  });
+  if (!response.ok) {
+    let detail = response.statusText;
+    try {
+      const payload = await response.json();
+      if (payload && payload.detail) {
+        detail = payload.detail;
+      }
+    } catch {
+      detail = response.statusText;
+    }
+    throw new Error(detail);
+  }
+  const blob = await response.blob();
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = filename;
+  link.click();
+  URL.revokeObjectURL(url);
+  setStatus("Downloaded " + filename, false);
+}
+
 async function duplicateNode() {
   const node = selectedNode();
   if (!node) {
@@ -766,6 +798,9 @@ bind("delete-node", deleteNode);
 bind("link-mapping", linkMapping);
 bind("save-packet", savePacket);
 bind("calc-sizes", calcSizes);
+bind("export-simulink", () => downloadExport("simulink", "simulink.csv"));
+bind("export-mapping", () => downloadExport("mapping", "mapping.csv"));
+bind("export-opcua", () => downloadExport("opcua", "opcua-nodes.txt"));
 bind("save-field", saveField);
 bind("clear-field", async () => clearFieldForm());
 bind("add-transform", addTransformation);

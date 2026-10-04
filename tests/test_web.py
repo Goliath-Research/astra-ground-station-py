@@ -60,6 +60,9 @@ def test_operator_page_lists_the_configurator_screens() -> None:
     assert 'id="server-password" type="password"' in page.text
     assert 'id="token" type="password"' in page.text
     assert 'id="duplicate-node"' in page.text
+    assert "Simulink CSV" in page.text
+    assert "Mapping CSV" in page.text
+    assert "OPC UA nodes" in page.text
     assert script.status_code == 200
     assert style.status_code == 200
     assert "console.log" not in script.text

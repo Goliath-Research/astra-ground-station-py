@@ -23,6 +23,8 @@ from starlette.responses import Response
 from astra.db.config_repo import ConfigRepo
 from astra.db.connection import connect
 from astra.db.errors import ConfigCode, ConfigError, DatabaseConfigError
+from astra.opcua import tag_path
+from astra.web.csv_text import csv_document
 from astra.web.parse import (
     as_bool,
     as_int,
@@ -74,6 +76,33 @@ _SERVER_KEYS = frozenset(
 )
 _TEST_KEYS = frozenset({"name", "description", "server_id"})
 _STREAM_KEYS = frozenset({"send", "rate"})
+
+_INTERFACE_COLUMNS = (
+    "varorder",
+    "recordname",
+    "recorddescription",
+    "fieldname",
+    "arraylen",
+    "typename",
+    "fielddescription",
+    "override",
+    "insequence",
+)
+_MAPPING_COLUMNS = (
+    "fieldid",
+    "connectionid",
+    "fieldorder",
+    "connectionorder",
+    "area",
+    "board",
+    "firstpin",
+    "interface",
+    "record",
+    "qty",
+    "field",
+    "shortname",
+    "description",
+)
 
 
 def http_status(code: ConfigCode) -> int:
@@ -230,6 +259,54 @@ async def create_mapping(request: Request, repo: Repo) -> dict[str, Any]:
 @router.delete("/mappings/{field_id}")
 def remove_mapping(field_id: int, repo: Repo) -> dict[str, Any]:
     return repo.delete_mapping(field_id)
+
+
+def _csv_response(document: str, filename: str) -> Response:
+    return Response(
+        content=document,
+        media_type="text/csv; charset=utf-8",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
+
+
+@router.get("/nodes/{node_id}/exports/simulink")
+def export_simulink(node_id: int, repo: Repo) -> Response:
+    """Simulink interface CSV from ``spgetinterface``."""
+    return _csv_response(
+        csv_document(_INTERFACE_COLUMNS, repo.interface_rows(node_id)),
+        "simulink.csv",
+    )
+
+
+@router.get("/nodes/{node_id}/exports/mapping")
+def export_mapping(node_id: int, repo: Repo) -> Response:
+    """Mapping CSV from ``spgetmappingwithorders``."""
+    return _csv_response(
+        csv_document(_MAPPING_COLUMNS, repo.mapping_rows(node_id)),
+        "mapping.csv",
+    )
+
+
+@router.get("/nodes/{node_id}/exports/opcua")
+def export_opcua(node_id: int, repo: Repo) -> Response:
+    """OPC UA node list the bridge publishes, one ``Astra{packet}/{field}`` per line."""
+    packet = repo.packet(node_id)
+    if packet is None or not isinstance(packet["name"], str):
+        raise ConfigError("not_found")
+    names = [
+        row["fieldname"]
+        for row in repo.interface_rows(node_id)
+        if isinstance(row["fieldname"], str)
+    ]
+    lines = [tag_path(packet["name"], name) for name in names]
+    body = "\n".join(lines)
+    if lines:
+        body += "\n"
+    return Response(
+        content=body,
+        media_type="text/plain; charset=utf-8",
+        headers={"Content-Disposition": 'attachment; filename="opcua-nodes.txt"'},
+    )
 
 
 @router.get("/nodes/{node_id}/packet")

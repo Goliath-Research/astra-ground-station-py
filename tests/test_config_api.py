@@ -726,6 +726,28 @@ def test_mapping_links_a_field_and_lists_the_pin(
         assert cleared_root.json()["connection_id"] is None
         after_root = client.get(f"/api/nodes/{node_id}/mappings")
         assert [item["field"] for item in after_root.json()] == ["pinfield"]
+
+        simulink = client.get(f"/api/nodes/{node_id}/exports/simulink")
+        assert simulink.status_code == 200
+        assert simulink.headers["content-type"].startswith("text/csv")
+        assert simulink.text.startswith(
+            "varorder;recordname;recorddescription;fieldname;arraylen;"
+            "typename;fielddescription;override;insequence\r\n"
+        )
+        assert "pinfield" in simulink.text
+        assert ";0;0\r\n" in simulink.text
+        opcua = client.get(f"/api/nodes/{node_id}/exports/opcua")
+        assert opcua.status_code == 200
+        assert "Astrap6-r2l/inner\n" in opcua.text
+        assert "Astrap6-r2l/pinfield\n" in opcua.text
+        mapping_csv = client.get(f"/api/nodes/{node_id}/exports/mapping")
+        assert mapping_csv.status_code == 200
+        assert mapping_csv.text.startswith("fieldid;connectionid;fieldorder;")
+        assert "p6-area;p6-board;3;" in mapping_csv.text
+        assert '"p6 pin"' in mapping_csv.text
+        missing_export = client.get("/api/nodes/2147483646/exports/simulink")
+        assert missing_export.status_code == 404
+
         cleared = client.delete(f"/api/mappings/{field_id}")
         assert cleared.status_code == 200
         assert cleared.json()["connection_id"] is None
