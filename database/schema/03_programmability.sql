@@ -1470,6 +1470,8 @@ $fn$;
 
 -- ---------------------------------------------------------------------------------------------------
 -- dbo.spMoveNodeToSeq(@NodeID, @Seq)   (#S IDENTITY ordering -> row_number)
+-- Difference: `parentid = parentid` is unknown when both are NULL, so a vehicle root was updated
+-- alone and its siblings kept a null seq. IS NOT DISTINCT FROM treats those roots as one sibling group.
 CREATE FUNCTION spmovenodetoseq(nodeid integer, seq integer)
 RETURNS void
 LANGUAGE plpgsql
@@ -1486,7 +1488,7 @@ BEGIN
     WITH s AS (
         SELECT tv.id, tv.seq, row_number() OVER (ORDER BY tv.seq NULLS FIRST, tv.name NULLS FIRST) AS i
           FROM treeversions tv
-         WHERE (tv.parentid = v_parentid) AND (tv.id <> p_nodeid)
+         WHERE (tv.parentid IS NOT DISTINCT FROM v_parentid) AND (tv.id <> p_nodeid)
     ), s2 AS (
         SELECT s.id,
                CASE WHEN s.i <  p_seq THEN s.i          -- UPDATE #S SET Seq = I     WHERE I <  @Seq
