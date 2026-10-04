@@ -4,8 +4,10 @@
 signed 32-bit little-endian value on Win64. ``GetDeviceT_MS`` reads the
 first four payload bytes the same way and does not look at the field table.
 
-There is no checksum on this frame. Chapter 10 checksums are not on the
-live path, and the migration plan describes no SLIP or UART wrapper.
+There is no checksum on this frame. A checksum that is computed, including
+a Chapter 10 checksum, keeps the low bits of its field width
+(``truncate_checksum``). Chapter 10 sync and TMATS are not on the live
+path, and the migration plan describes no SLIP or UART wrapper.
 """
 
 import struct

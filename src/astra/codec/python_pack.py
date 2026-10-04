@@ -5,28 +5,47 @@ that ``SavePacket`` has filled with zeros. Bit 0 of a value is the next
 least-significant bit of the next byte, and multi-byte values continue
 little-endian. Q types are the raw integer (``SaveValue`` does not scale).
 
-Out-of-range integers keep the low bits (300 as ``u8`` is ``2c``). Null
-packs as 0. There is no checksum on this payload.
+Out-of-range field values saturate to the type's limits. Null packs as 0.
+Delphi ``SaveValue`` kept the low bits (300 as ``u8`` is ``2c``); that
+behavior is ``overflow="wrap"`` and is not the default. A checksum uses
+``truncate_checksum`` and keeps its low bits. This payload has no checksum.
 """
 
+import math
 import struct
 from collections.abc import Sequence
+from typing import Literal, assert_never
 
 from astra.codec.errors import CodecError
 from astra.codec.types import FLOAT_TYPE_IDS, SIGNED_TYPE_IDS, TYPE_WIDTH, FlatField
 
 Value = bool | int | float | None
+Overflow = Literal["clip", "wrap"]
+
+# Largest finite IEEE-754 binary32 value. binary64 uses ``sys.float_info.max``.
+_F32_MAX = float(struct.unpack("<f", b"\xff\xff\x7f\x7f")[0])
+_F64_MAX = float(struct.unpack("<d", b"\xff\xff\xff\xff\xff\xff\xef\x7f")[0])
 
 
-def pack_flat(layout: Sequence[FlatField], values: Sequence[Value]) -> bytes:
-    """Pack ``values`` in ``layout`` order into a zeroed payload."""
+def pack_flat(
+    layout: Sequence[FlatField],
+    values: Sequence[Value],
+    *,
+    overflow: Overflow = "clip",
+) -> bytes:
+    """Pack ``values`` in ``layout`` order into a zeroed payload.
+
+    ``overflow="clip"`` saturates each field to its type. ``overflow="wrap"``
+    is the legacy Delphi low-bit truncation.
+    """
+    mode = _check_overflow(overflow)
     if len(layout) != len(values):
         raise CodecError(f"layout has {len(layout)} scalars and {len(values)} values were given")
     bit_count = 0
     prepared: list[tuple[int, int]] = []
     for item, value in zip(layout, values, strict=True):
         _check_width(item)
-        prepared.append((_bits_of(item, value), item.bit_width))
+        prepared.append((_bits_of(item, value, mode), item.bit_width))
         bit_count += item.bit_width
     return _pack_prepared(prepared, bit_count)
 
@@ -54,21 +73,42 @@ def _check_width(item: FlatField) -> None:
         raise CodecError(f"{item.name}: kind {item.kind} does not have width {item.bit_width}")
 
 
-def pack_unsigned_bits(widths: Sequence[int], values: Sequence[int | None]) -> bytes:
+def pack_unsigned_bits(
+    widths: Sequence[int],
+    values: Sequence[int | None],
+    *,
+    overflow: Overflow = "clip",
+) -> bytes:
     """Pack unsigned integers of explicit bit widths.
 
     Used for minor-frame fields whose widths come from the database rather
-    than from ``TVehicleDataTypes``. Null is 0. Extra high bits are dropped.
+    than from ``TVehicleDataTypes``. Null is 0. The default saturates to
+    ``[0, 2^width-1]``. ``overflow="wrap"`` keeps the low bits.
     """
+    mode = _check_overflow(overflow)
     if len(widths) != len(values):
         raise CodecError(f"{len(widths)} widths and {len(values)} values were given")
     prepared: list[tuple[int, int]] = []
     bit_count = 0
     for index, (width, value) in enumerate(zip(widths, values, strict=True)):
         _require_width(width, index)
-        prepared.append((_low_bits(value, width, f"field {index}"), width))
+        prepared.append((_unsigned_bits(value, width, f"field {index}", mode), width))
         bit_count += width
     return _pack_prepared(prepared, bit_count)
+
+
+def truncate_checksum(total: int, width: int) -> int:
+    """Keep the low ``width`` bits of a checksum or accumulator.
+
+    Field values saturate. A checksum does not: the sum is truncated to the
+    field width. A Chapter 10 checksum uses this when that path is
+    implemented. The live UDP payload has no checksum of its own.
+    """
+    if isinstance(total, bool) or not isinstance(total, int):
+        raise CodecError(f"checksum total must be an int, got {total!r}")
+    if isinstance(width, bool) or not isinstance(width, int) or width < 1:
+        raise CodecError(f"checksum width must be an integer >= 1, got {width!r}")
+    return total & ((1 << width) - 1)
 
 
 def unpack_unsigned_bits(widths: Sequence[int], payload: bytes) -> tuple[int, ...]:
@@ -93,16 +133,20 @@ def _require_width(width: int, index: int) -> None:
         raise CodecError(f"bit width {width!r} at index {index} must be an integer >= 1")
 
 
-def _bits_of(item: FlatField, value: Value) -> int:
+def _bits_of(item: FlatField, value: Value, overflow: Overflow) -> int:
     if item.kind in FLOAT_TYPE_IDS:
-        return _float_to_bits(item, value)
+        return _float_to_bits(item, value, overflow)
     if item.kind == 1:
-        return _bool_to_bits(item, value)
+        return _bool_to_bits(item, value, overflow)
     if value is None:
         return 0
     if isinstance(value, bool) or not isinstance(value, int):
         raise CodecError(f"{item.name}: expected an int, got {type(value).__name__}")
-    return _low_bits(value, item.bit_width, item.name)
+    if overflow == "wrap":
+        return _low_bits(value, item.bit_width, item.name)
+    if overflow == "clip":
+        return _clip_int(value, item.bit_width, signed=item.kind in SIGNED_TYPE_IDS)
+    assert_never(overflow)
 
 
 def _value_of(item: FlatField, raw: int) -> Value:
@@ -131,28 +175,90 @@ def _low_bits(value: int | None, width: int, name: str) -> int:
     return value & ((1 << width) - 1)
 
 
-def _bool_to_bits(item: FlatField, value: Value) -> int:
+def _unsigned_bits(value: int | None, width: int, name: str, overflow: Overflow) -> int:
+    if overflow == "wrap":
+        return _low_bits(value, width, name)
+    if overflow == "clip":
+        if value is None:
+            return 0
+        if isinstance(value, bool) or not isinstance(value, int):
+            raise CodecError(f"{name}: expected an int, got {type(value).__name__}")
+        return _clip_int(value, width, signed=False)
+    assert_never(overflow)
+
+
+def _clip_int(value: int, width: int, *, signed: bool) -> int:
+    """Saturate ``value`` and return its low ``width`` bits."""
+    if signed:
+        limit = 1 << (width - 1)
+        if value < -limit:
+            value = -limit
+        elif value > limit - 1:
+            value = limit - 1
+    else:
+        maximum = (1 << width) - 1
+        if value < 0:
+            value = 0
+        elif value > maximum:
+            value = maximum
+    return value & ((1 << width) - 1)
+
+
+def _bool_to_bits(item: FlatField, value: Value, overflow: Overflow) -> int:
     if value is None or value is False:
         return 0
     if value is True:
         return 1
     if isinstance(value, int):
-        return value & 1
+        if overflow == "wrap":
+            return value & 1
+        if overflow == "clip":
+            return 0 if value == 0 else 1
+        assert_never(overflow)
     raise CodecError(f"{item.name}: a bool field must be a bool, an int, or null")
 
 
-def _float_to_bits(item: FlatField, value: Value) -> int:
+def _float_to_bits(item: FlatField, value: Value, overflow: Overflow) -> int:
     if value is None:
         value = 0.0
     if isinstance(value, bool) or not isinstance(value, (int, float)):
         raise CodecError(f"{item.name}: expected a float, got {type(value).__name__}")
+    number = float(value)
+    if overflow == "clip":
+        number = _saturate_float(item.kind, number)
+    elif overflow != "wrap":
+        assert_never(overflow)
     fmt = "<f" if item.kind == 9 else "<d"
     try:
-        raw = struct.pack(fmt, float(value))
+        raw = struct.pack(fmt, number)
     except OverflowError as exc:
         width = TYPE_WIDTH[item.kind]
         raise CodecError(f"{item.name}: {value} does not fit in {width} bits") from exc
     return int.from_bytes(raw, "little")
+
+
+def _saturate_float(kind: int, value: float) -> float:
+    """Clamp a finite float to the type's finite range.
+
+    NaN and infinities are encodings the type can store, so they pass
+    through. A finite value outside that range saturates to the extreme.
+    """
+    if math.isnan(value) or math.isinf(value):
+        return value
+    limit = _F32_MAX if kind == 9 else _F64_MAX
+    if value > limit:
+        return limit
+    if value < -limit:
+        return -limit
+    return value
+
+
+def _check_overflow(overflow: str) -> Overflow:
+    if overflow == "clip":
+        return "clip"
+    if overflow == "wrap":
+        return "wrap"
+    raise CodecError(f"overflow must be 'clip' or 'wrap', got {overflow!r}")
 
 
 def _pack_prepared(prepared: list[tuple[int, int]], bit_count: int) -> bytes:
