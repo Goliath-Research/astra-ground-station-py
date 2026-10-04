@@ -17,6 +17,9 @@ const state = {
   fieldId: null,
   deviceId: null,
   serverId: null,
+  testId: null,
+  logPacketId: null,
+  logOffset: 0,
 };
 
 function $(id) {
@@ -152,6 +155,8 @@ async function showTab(name) {
     await loadServers();
   } else if (name === "stream") {
     await loadStream();
+  } else if (name === "tests") {
+    await loadTests();
   }
 }
 
@@ -461,6 +466,165 @@ async function loadStream() {
   host.appendChild(table);
 }
 
+async function loadTests() {
+  const rows = await api("/api/tests");
+  const host = $("tests");
+  host.replaceChildren();
+  const table = document.createElement("table");
+  const head = document.createElement("tr");
+  for (const label of ["Name", "Server", "Active"]) {
+    addHeader(head, label);
+  }
+  table.appendChild(head);
+  for (const row of rows) {
+    const line = document.createElement("tr");
+    addCell(line, row.name);
+    addCell(line, row.server_id);
+    addCell(line, row.active ? "yes" : "no");
+    line.addEventListener("click", () => {
+      selectTest(row.id).catch((error) => setStatus(error.message, true));
+    });
+    table.appendChild(line);
+  }
+  host.appendChild(table);
+  if (state.testId !== null) {
+    await loadJobs();
+  }
+}
+
+async function addTest() {
+  const created = await api("/api/tests", {
+    method: "POST",
+    json: {
+      name: $("test-name").value.trim(),
+      server_id: Number($("test-server").value),
+    },
+  });
+  state.testId = created.id;
+  $("test-name").value = "";
+  await loadTests();
+  setStatus("Added test " + created.name, false);
+}
+
+async function selectTest(testId) {
+  state.testId = testId;
+  state.logPacketId = null;
+  state.logOffset = 0;
+  $("log").replaceChildren();
+  await loadJobs();
+}
+
+async function loadJobs() {
+  const host = $("jobs");
+  host.replaceChildren();
+  if (state.testId === null) {
+    return;
+  }
+  const rows = await api("/api/tests/" + state.testId + "/jobs");
+  const table = document.createElement("table");
+  const head = document.createElement("tr");
+  for (const label of ["Packet", "Done", ""]) {
+    addHeader(head, label);
+  }
+  table.appendChild(head);
+  for (const row of rows) {
+    const line = document.createElement("tr");
+    addCell(line, row.packet_id);
+    addCell(line, row.done ? "yes" : "no");
+    const action = document.createElement("td");
+    if (row.done) {
+      const show = document.createElement("button");
+      show.type = "button";
+      show.textContent = "Show log";
+      show.addEventListener("click", () => {
+        openLog(row.packet_id).catch((error) => setStatus(error.message, true));
+      });
+      action.appendChild(show);
+      const csv = document.createElement("button");
+      csv.type = "button";
+      csv.textContent = "CSV";
+      csv.addEventListener("click", () => {
+        downloadLog(row.packet_id).catch((error) => setStatus(error.message, true));
+      });
+      action.appendChild(csv);
+    }
+    line.appendChild(action);
+    table.appendChild(line);
+  }
+  host.appendChild(table);
+}
+
+async function openLog(packetId) {
+  state.logPacketId = packetId;
+  state.logOffset = 0;
+  await loadLog();
+}
+
+async function loadLog() {
+  const host = $("log");
+  host.replaceChildren();
+  if (state.testId === null || state.logPacketId === null) {
+    return;
+  }
+  const page = await api(
+    "/api/tests/" +
+      state.testId +
+      "/packets/" +
+      state.logPacketId +
+      "/log?limit=20&offset=" +
+      state.logOffset,
+  );
+  const title = document.createElement("p");
+  title.textContent = page.table + " (" + page.total + " rows)";
+  host.appendChild(title);
+  const table = document.createElement("table");
+  const head = document.createElement("tr");
+  for (const name of page.columns) {
+    addHeader(head, name);
+  }
+  table.appendChild(head);
+  for (const row of page.rows) {
+    const line = document.createElement("tr");
+    for (const name of page.columns) {
+      addCell(line, row[name]);
+    }
+    table.appendChild(line);
+  }
+  host.appendChild(table);
+  const actions = document.createElement("div");
+  actions.className = "actions";
+  if (state.logOffset > 0) {
+    const previous = document.createElement("button");
+    previous.type = "button";
+    previous.textContent = "Previous";
+    previous.addEventListener("click", () => {
+      state.logOffset = Math.max(0, state.logOffset - page.limit);
+      loadLog().catch((error) => setStatus(error.message, true));
+    });
+    actions.appendChild(previous);
+  }
+  if (state.logOffset + page.rows.length < page.total) {
+    const next = document.createElement("button");
+    next.type = "button";
+    next.textContent = "Next";
+    next.addEventListener("click", () => {
+      state.logOffset += page.limit;
+      loadLog().catch((error) => setStatus(error.message, true));
+    });
+    actions.appendChild(next);
+  }
+  host.appendChild(actions);
+}
+
+async function downloadLog(packetId) {
+  if (state.testId === null) {
+    setStatus("Select a test first.", true);
+    return;
+  }
+  const path = "/api/tests/" + state.testId + "/packets/" + packetId + "/log.csv";
+  await downloadFile(path, "test-log.csv");
+}
+
 function showWorkspace() {
   $("login").hidden = true;
   $("workspace").hidden = false;
@@ -553,8 +717,12 @@ async function downloadExport(kind, filename) {
     setStatus("Select a node first.", true);
     return;
   }
+  await downloadFile("/api/nodes/" + node.id + "/exports/" + kind, filename);
+}
+
+async function downloadFile(path, filename) {
   const token = sessionStorage.getItem(TOKEN_KEY);
-  const response = await fetch("/api/nodes/" + node.id + "/exports/" + kind, {
+  const response = await fetch(path, {
     headers: token ? { Authorization: "Bearer " + token } : {},
   });
   if (!response.ok) {
@@ -809,6 +977,7 @@ bind("clear-field", async () => clearFieldForm());
 bind("add-transform", addTransformation);
 bind("save-device", saveDevice);
 bind("clear-device", async () => clearDeviceForm());
+bind("add-test", addTest);
 bind("save-server", saveServer);
 bind("clear-server", async () => clearServerForm());
 bindTabs();

@@ -57,6 +57,7 @@
           <button type="button" class="tab" data-tab="devices">Devices</button>
           <button type="button" class="tab" data-tab="servers">Servers</button>
           <button type="button" class="tab" data-tab="stream">Send / Rate</button>
+          <button type="button" class="tab" data-tab="tests">Tests</button>
         </nav>
 
         <section id="panel-packet" data-panel="packet">
@@ -171,6 +172,21 @@
             <button type="button" id="save-server">Save server</button>
             <button type="button" id="clear-server">Clear</button>
           </div>
+        </section>
+
+        <section id="panel-tests" data-panel="tests" hidden>
+          <h2>Tests</h2>
+          <p>The log and its CSV stay closed until the job is done. The table is the packet name, an underscore, and the test id, in the testlog schema.</p>
+          <div id="tests"></div>
+          <label for="test-name">Name</label>
+          <input id="test-name" type="text" maxlength="64" />
+          <label for="test-server">Server id</label>
+          <input id="test-server" type="number" min="1" />
+          <div class="actions">
+            <button type="button" id="add-test">Add test</button>
+          </div>
+          <div id="jobs"></div>
+          <div id="log"></div>
         </section>
 
         <section id="panel-stream" data-panel="stream" hidden>

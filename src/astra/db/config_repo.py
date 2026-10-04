@@ -10,11 +10,13 @@ part of a returned row. Callers see ``password_set`` only.
 
 from __future__ import annotations
 
+import re
 from datetime import datetime
 from decimal import Decimal
 from typing import Any
 
 import psycopg
+from psycopg import sql
 from psycopg.rows import dict_row
 
 from astra.db.errors import ConfigError
@@ -85,6 +87,8 @@ _DEVICE_COLUMNS: dict[str, str] = {
     "ipv4": "ipv4",
     "port": "port",
 }
+
+_LOG_NAME = re.compile(r"^[a-z_][a-z0-9_]*$")
 
 _FIELD_COLUMNS: dict[str, str] = {
     "name": "name",
@@ -253,13 +257,21 @@ class ConfigRepo:
     def __init__(self, conn: psycopg.Connection[Any]) -> None:
         self._conn = conn
 
-    def _fetch(self, sql: str, params: tuple[Any, ...] = ()) -> list[dict[str, Any]]:
+    def _fetch(
+        self,
+        sql: str | sql.SQL | sql.Composed,
+        params: tuple[Any, ...] = (),
+    ) -> list[dict[str, Any]]:
         with self._conn.cursor(row_factory=dict_row) as cur:
             cur.execute(sql, params)
             fetched = cur.fetchall()
         return [{key: _jsonable(value) for key, value in row.items()} for row in fetched]
 
-    def _one(self, sql: str, params: tuple[Any, ...] = ()) -> dict[str, Any] | None:
+    def _one(
+        self,
+        sql: str | sql.SQL | sql.Composed,
+        params: tuple[Any, ...] = (),
+    ) -> dict[str, Any] | None:
         rows = self._fetch(sql, params)
         if not rows:
             return None
@@ -871,3 +883,93 @@ class ConfigRepo:
             (test_id,),
         )
         return [_job(row) for row in rows]
+
+    def log_page(
+        self,
+        test_id: int,
+        packet_id: int,
+        *,
+        limit: int,
+        offset: int,
+    ) -> dict[str, Any]:
+        """One page of ``testlog.{packet}_{test}`` after the job is done.
+
+        The table name is the packet name, an underscore, and the test id,
+        folded to lower case. The grid stays closed until ``jobs.done`` is
+        true. ``IntfID`` is not used as the key.
+        """
+        table = self._done_log_table(test_id, packet_id)
+        columns = self._log_columns(table)
+        first = columns[0]
+        count_sql = sql.SQL("SELECT COUNT(*) AS n FROM testlog.{}").format(sql.Identifier(table))
+        count_row = self._one(count_sql, ())
+        total = 0 if count_row is None else count_row["n"]
+        if not isinstance(total, int):
+            raise ConfigError("conflict")
+        query = sql.SQL(
+            "SELECT {cols} FROM testlog.{table} ORDER BY {first} LIMIT %s OFFSET %s"
+        ).format(
+            cols=sql.SQL(", ").join(sql.Identifier(name) for name in columns),
+            table=sql.Identifier(table),
+            first=sql.Identifier(first),
+        )
+        rows = self._fetch(query, (limit, offset))
+        return {
+            "table": table,
+            "columns": columns,
+            "rows": [{name: _jsonable(row[name]) for name in columns} for row in rows],
+            "limit": limit,
+            "offset": offset,
+            "total": total,
+        }
+
+    def log_csv(self, test_id: int, packet_id: int) -> tuple[str, list[str], list[dict[str, Any]]]:
+        """Every row of a finished job's log, in first-column order."""
+        table = self._done_log_table(test_id, packet_id)
+        columns = self._log_columns(table)
+        query = sql.SQL("SELECT {cols} FROM testlog.{table} ORDER BY {first}").format(
+            cols=sql.SQL(", ").join(sql.Identifier(name) for name in columns),
+            table=sql.Identifier(table),
+            first=sql.Identifier(columns[0]),
+        )
+        rows = self._fetch(query, ())
+        exported = [{name: _jsonable(row[name]) for name in columns} for row in rows]
+        return table, columns, exported
+
+    def _done_log_table(self, test_id: int, packet_id: int) -> str:
+        row = self._one(
+            """
+            SELECT j.done, v.name AS packetname
+            FROM jobs AS j
+            INNER JOIN packets AS p ON p.id = j.packetid
+            INNER JOIN vartypes AS v ON v.id = p.vartypeid
+            WHERE j.testid = %s AND j.packetid = %s
+            """,
+            (test_id, packet_id),
+        )
+        if row is None:
+            raise ConfigError("not_found")
+        if row["done"] is not True:
+            raise ConfigError("conflict")
+        name = row["packetname"]
+        if not isinstance(name, str):
+            raise ConfigError("invalid")
+        table = f"{name}_{test_id}".lower()
+        if _LOG_NAME.fullmatch(table) is None:
+            raise ConfigError("invalid")
+        return table
+
+    def _log_columns(self, table: str) -> list[str]:
+        rows = self._fetch(
+            """
+            SELECT column_name
+            FROM information_schema.columns
+            WHERE table_schema = 'testlog' AND table_name = %s
+            ORDER BY ordinal_position
+            """,
+            (table,),
+        )
+        columns = [row["column_name"] for row in rows if isinstance(row["column_name"], str)]
+        if not columns:
+            raise ConfigError("not_found")
+        return columns

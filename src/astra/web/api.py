@@ -644,3 +644,24 @@ def stop_test(test_id: int, repo: Repo) -> dict[str, Any]:
 @router.get("/tests/{test_id}/jobs")
 def list_jobs(test_id: int, repo: Repo) -> list[dict[str, Any]]:
     return repo.jobs(test_id)
+
+
+@router.get("/tests/{test_id}/packets/{packet_id}/log")
+def get_test_log(
+    test_id: int,
+    packet_id: int,
+    repo: Repo,
+    limit: int = 50,
+    offset: int = 0,
+) -> dict[str, Any]:
+    """Page a finished job's ``testlog`` table. A job that is not done is a conflict."""
+    if limit < 1 or limit > 200 or offset < 0:
+        raise ConfigError("invalid")
+    return repo.log_page(test_id, packet_id, limit=limit, offset=offset)
+
+
+@router.get("/tests/{test_id}/packets/{packet_id}/log.csv")
+def get_test_log_csv(test_id: int, packet_id: int, repo: Repo) -> Response:
+    """CSV of a finished job. Same `;` quoting as the configurator exports."""
+    table, columns, rows = repo.log_csv(test_id, packet_id)
+    return _csv_response(csv_document(tuple(columns), rows), f"{table}.csv")

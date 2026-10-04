@@ -837,3 +837,137 @@ def test_missing_database_does_not_echo_the_url() -> None:
     assert denied.status_code == 503
     assert denied.json() == {"detail": "DATABASE_URL is not set"}
     assert _TOKEN not in denied.text
+
+
+def test_log_pages_only_after_the_job_is_done(client: TestClient, database_url: str) -> None:
+    root_id: int | None = None
+    server_id: int | None = None
+    table = ""
+    _wipe_named_fixtures(database_url)
+    try:
+        vehicle = client.post("/api/tree", json={"name": "p6-vehicle", "icon_id": 1})
+        root_id = vehicle.json()["id"]
+        stage = client.post(
+            "/api/tree",
+            json={"name": "p6-stage", "parent_id": root_id, "icon_id": 2},
+        )
+        version = client.post(
+            "/api/tree",
+            json={"name": "p6-version", "parent_id": stage.json()["id"], "icon_id": 3},
+        )
+        release = client.post(
+            "/api/tree",
+            json={"name": "p6-release", "parent_id": version.json()["id"], "icon_id": 4},
+        )
+        smart = client.post(
+            "/api/tree",
+            json={"name": "p6-smart", "parent_id": release.json()["id"], "icon_id": 5},
+        )
+        packet_node = client.post(
+            "/api/tree",
+            json={"name": "p6r2l", "parent_id": smart.json()["id"], "icon_id": 7},
+        )
+        node_id = packet_node.json()["id"]
+        saved = client.put(
+            f"/api/nodes/{node_id}/packet",
+            json={"packet_id": 910064, "name": "p6r2l", "is_input": False},
+        )
+        assert saved.status_code == 200
+        hyphen_node = client.post(
+            "/api/tree",
+            json={"name": "p6-r2l", "parent_id": smart.json()["id"], "icon_id": 7},
+        )
+        hyphen = client.put(
+            f"/api/nodes/{hyphen_node.json()['id']}/packet",
+            json={"packet_id": 910065, "name": "p6-r2l", "is_input": False},
+        )
+        assert hyphen.status_code == 200
+        server = client.post(
+            "/api/servers",
+            json={
+                "name": "p6-log-server",
+                "win_name": "p6-win",
+                "full_name": "p6-full",
+                "ipv4": "127.0.0.1",
+                "opc_server_name": "opc.tcp://127.0.0.1:4840/astra/",
+                "sql_server_instance": "local",
+                "database_name": "astra",
+                "username": "astra",
+                "password": _PASSWORD,
+            },
+        )
+        assert server.status_code == 201
+        server_id = server.json()["id"]
+        created = client.post(
+            "/api/tests",
+            json={"name": "p6-log", "server_id": server_id},
+        )
+        assert created.status_code == 201
+        test_id = created.json()["id"]
+        table = f"p6r2l_{test_id}"
+        with connect(database_url) as conn:
+            conn.execute(
+                """
+                INSERT INTO jobs (testid, packetid, intfid, done, msg)
+                VALUES (%s, 910064, %s, false, 'waiting')
+                """,
+                (test_id, node_id),
+            )
+            conn.execute(
+                """
+                INSERT INTO jobs (testid, packetid, intfid, done, msg)
+                VALUES (%s, 910065, %s, true, 'done')
+                """,
+                (test_id, hyphen_node.json()["id"]),
+            )
+            conn.execute(
+                f"""
+                CREATE TABLE testlog.{table} (
+                    stamp timestamp(3) NOT NULL,
+                    note varchar(32),
+                    flag boolean
+                )
+                """
+            )
+            conn.execute(
+                f"""
+                INSERT INTO testlog.{table} (stamp, note, flag)
+                VALUES
+                    ('2026-01-01 00:00:00', 'p6 only', false),
+                    ('2026-01-01 00:00:01', 'has space', true),
+                    ('2026-01-01 00:00:02', 'third', false)
+                """
+            )
+            conn.commit()
+        closed = client.get(f"/api/tests/{test_id}/packets/910064/log")
+        assert closed.status_code == 409
+        assert closed.json() == {"detail": "conflict"}
+        unsafe = client.get(f"/api/tests/{test_id}/packets/910065/log")
+        assert unsafe.status_code == 400
+        with connect(database_url) as conn:
+            conn.execute(
+                "UPDATE jobs SET done = true WHERE testid = %s AND packetid = 910064",
+                (test_id,),
+            )
+            conn.commit()
+        page = client.get(f"/api/tests/{test_id}/packets/910064/log?limit=2&offset=0")
+        assert page.status_code == 200
+        body = page.json()
+        assert body["table"] == table
+        assert body["table"] != "l2r_1"
+        assert body["total"] == 3
+        assert [row["note"] for row in body["rows"]] == ["p6 only", "has space"]
+        nxt = client.get(f"/api/tests/{test_id}/packets/910064/log?limit=2&offset=2")
+        assert [row["note"] for row in nxt.json()["rows"]] == ["third"]
+        exported = client.get(f"/api/tests/{test_id}/packets/910064/log.csv")
+        assert exported.status_code == 200
+        assert exported.text.startswith("stamp;note;flag\r\n")
+        assert '"has space";1' in exported.text
+        assert "p6 only" in exported.text
+        assert "l2r_1" not in exported.text
+    finally:
+        if table:
+            with connect(database_url) as conn:
+                conn.execute(f"DROP TABLE IF EXISTS testlog.{table}")
+                conn.commit()
+        _cleanup(database_url, root_id, server_id)

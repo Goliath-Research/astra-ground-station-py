@@ -55,6 +55,7 @@ def test_operator_page_lists_the_configurator_screens() -> None:
         "Devices",
         "Servers",
         "Send / Rate",
+        "Tests",
     ):
         assert label in page.text
     assert 'id="server-password" type="password"' in page.text
