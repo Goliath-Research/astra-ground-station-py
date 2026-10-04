@@ -301,6 +301,49 @@ def test_deleting_a_vehicle_leaves_its_children(
         _cleanup(database_url, root_id, None)
 
 
+def test_moving_a_vehicle_resequences_sibling_roots(
+    client: TestClient,
+    database_url: str,
+) -> None:
+    created_ids: list[int] = []
+    _wipe_named_fixtures(database_url)
+    try:
+        for name in ("p6-vehicle", "p6-vehicle-b", "p6-vehicle-c"):
+            created = client.post("/api/tree", json={"name": name, "icon_id": 1})
+            assert created.status_code == 201
+            node_id = created.json()["id"]
+            assert isinstance(node_id, int)
+            created_ids.append(node_id)
+
+        def root_names() -> list[str]:
+            rows = client.get("/api/tree").json()
+            names = [row["name"] for row in rows if row["id"] in created_ids]
+            assert all(isinstance(name, str) for name in names)
+            return names
+
+        def root_index(node_id: int) -> int:
+            rows = [row for row in client.get("/api/tree").json() if row["parent_id"] is None]
+            return next(index for index, row in enumerate(rows) if row["id"] == node_id)
+
+        assert root_names() == ["p6-vehicle", "p6-vehicle-b", "p6-vehicle-c"]
+        moved_down = client.patch(
+            f"/api/tree/{created_ids[0]}",
+            json={"seq": root_index(created_ids[0]) + 2},
+        )
+        assert moved_down.status_code == 200
+        assert root_names() == ["p6-vehicle-b", "p6-vehicle", "p6-vehicle-c"]
+
+        moved_up = client.patch(
+            f"/api/tree/{created_ids[2]}",
+            json={"seq": root_index(created_ids[2])},
+        )
+        assert moved_up.status_code == 200
+        assert root_names() == ["p6-vehicle-b", "p6-vehicle-c", "p6-vehicle"]
+    finally:
+        for root_id in created_ids:
+            _cleanup(database_url, root_id, None)
+
+
 def test_create_seq_is_a_sibling_position(client: TestClient, database_url: str) -> None:
     root_id: int | None = None
     _wipe_named_fixtures(database_url)
