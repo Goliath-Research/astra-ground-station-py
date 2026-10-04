@@ -509,6 +509,11 @@ function testAction(testId, action, label) {
 
 async function runTest(testId, action) {
   const saved = await api("/api/tests/" + testId + "/" + action, { method: "POST" });
+  if (saved.id !== state.testId) {
+    state.logPacketId = null;
+    state.logOffset = 0;
+    $("log").replaceChildren();
+  }
   state.testId = saved.id;
   await loadTests();
   if (action === "start") {
