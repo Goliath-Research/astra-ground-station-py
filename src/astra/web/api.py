@@ -24,7 +24,7 @@ from astra.db.config_repo import ConfigRepo
 from astra.db.connection import connect
 from astra.db.errors import ConfigCode, ConfigError, DatabaseConfigError
 from astra.opcua import tag_path
-from astra.web.csv_text import csv_document
+from astra.web.csv_text import INTERFACE_COLUMNS, csv_document
 from astra.web.parse import (
     as_bool,
     as_int,
@@ -77,17 +77,6 @@ _SERVER_KEYS = frozenset(
 _TEST_KEYS = frozenset({"name", "description", "server_id"})
 _STREAM_KEYS = frozenset({"send", "rate"})
 
-_INTERFACE_COLUMNS = (
-    "varorder",
-    "recordname",
-    "recorddescription",
-    "fieldname",
-    "arraylen",
-    "typename",
-    "fielddescription",
-    "override",
-    "insequence",
-)
 _MAPPING_COLUMNS = (
     "fieldid",
     "connectionid",
@@ -273,7 +262,7 @@ def _csv_response(document: str, filename: str) -> Response:
 def export_simulink(node_id: int, repo: Repo) -> Response:
     """Simulink interface CSV from ``spgetinterface``."""
     return _csv_response(
-        csv_document(_INTERFACE_COLUMNS, repo.interface_rows(node_id)),
+        csv_document(INTERFACE_COLUMNS, repo.interface_rows(node_id)),
         "simulink.csv",
     )
 

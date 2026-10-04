@@ -76,7 +76,7 @@ name remains `astra-ground-station`.
 | `python -m astra.tmoip` | `AstraTMoIP` and the desktop twin |
 | `python -m astra.exporter` | `AstraLogExporter` and the desktop twin |
 | `python -m astra.web` | Configurator and test manager, as a FastAPI app |
-| `python -m astra.cli.generate` | `AstraGenerator` |
+| `python -m astra.cli.generate STAGE NODE PACKET FILE.csv` | `AstraGenerator` |
 | `python -m astra.cli.device` | `AstraDevice` |
 | `python -m astra.cli.tm_encoder` | `AstraTMEncoder`, headless |
 

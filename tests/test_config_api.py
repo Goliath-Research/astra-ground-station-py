@@ -11,6 +11,7 @@ import psycopg
 import pytest
 from fastapi.testclient import TestClient
 
+from astra.cli.generate import main as generate_main
 from astra.db.connection import connect, database_url_from_env
 from astra.db.schema_loader import apply_schema
 from astra.web import create_app
@@ -837,6 +838,64 @@ def test_missing_database_does_not_echo_the_url() -> None:
     assert denied.status_code == 503
     assert denied.json() == {"detail": "DATABASE_URL is not set"}
     assert _TOKEN not in denied.text
+
+
+def test_generator_writes_the_interface_csv(
+    client: TestClient,
+    database_url: str,
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    root_id: int | None = None
+    _wipe_named_fixtures(database_url)
+    try:
+        vehicle = client.post("/api/tree", json={"name": "p6-vehicle", "icon_id": 1})
+        root_id = vehicle.json()["id"]
+        stage = client.post(
+            "/api/tree",
+            json={"name": "p6-stage", "parent_id": root_id, "icon_id": 2},
+        )
+        version = client.post(
+            "/api/tree",
+            json={"name": "p6-version", "parent_id": stage.json()["id"], "icon_id": 3},
+        )
+        release = client.post(
+            "/api/tree",
+            json={"name": "p6-release", "parent_id": version.json()["id"], "icon_id": 4},
+        )
+        smart = client.post(
+            "/api/tree",
+            json={"name": "p6-smart", "parent_id": release.json()["id"], "icon_id": 5},
+        )
+        packet_node = client.post(
+            "/api/tree",
+            json={"name": "p6r2l", "parent_id": smart.json()["id"], "icon_id": 7},
+        )
+        node_id = packet_node.json()["id"]
+        _ensure_u8(database_url, root_id)
+        saved = client.put(
+            f"/api/nodes/{node_id}/packet",
+            json={"packet_id": 910066, "name": "p6r2l", "is_input": False},
+        )
+        assert saved.status_code == 200
+        field = client.post(
+            f"/api/vartypes/{saved.json()['var_type_id']}/fields",
+            json={"name": "flags", "type_id": 2, "qty": 1},
+        )
+        assert field.status_code == 201
+        destination = tmp_path / "interface.csv"
+        missing = generate_main(["missing", "missing", "missing", str(destination)])
+        assert missing == 1
+        assert capsys.readouterr().err.strip() == "not_found"
+        assert not destination.exists()
+        written = generate_main(["p6-stage", "p6-smart", "p6r2l", str(destination)])
+        assert written == 0
+        text = destination.read_text(encoding="utf-8")
+        assert text.startswith("varorder;recordname;")
+        assert "flags" in text
+        assert "astra:astra" not in text
+    finally:
+        _cleanup(database_url, root_id, None)
 
 
 def test_log_pages_only_after_the_job_is_done(client: TestClient, database_url: str) -> None:

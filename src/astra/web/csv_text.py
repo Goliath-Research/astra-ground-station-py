@@ -12,6 +12,18 @@ from typing import Any
 
 _BOOLEAN = frozenset({"override", "insequence"})
 
+INTERFACE_COLUMNS = (
+    "varorder",
+    "recordname",
+    "recorddescription",
+    "fieldname",
+    "arraylen",
+    "typename",
+    "fielddescription",
+    "override",
+    "insequence",
+)
+
 
 def csv_document(header: tuple[str, ...], rows: list[dict[str, Any]]) -> str:
     """Return one CSV document, including the trailing line break."""

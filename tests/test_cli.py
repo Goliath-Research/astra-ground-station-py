@@ -11,6 +11,16 @@ def test_cli_checks_exit_cleanly() -> None:
     assert encoder_main(["--check"]) == 0
 
 
-def test_generator_is_not_ported() -> None:
-    with pytest.raises(NotImplementedError, match="generator"):
-        generate_main(["stage", "node", "interface", "out.csv"])
+def test_generator_requires_four_arguments() -> None:
+    assert generate_main([]) == 2
+
+
+def test_generator_reports_a_missing_database(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    monkeypatch.delenv("DATABASE_URL", raising=False)
+    assert generate_main(["stage", "node", "packet", "out.csv"]) == 1
+    captured = capsys.readouterr()
+    assert captured.err.strip() == "DATABASE_URL is not set"
+    assert "postgresql://" not in captured.err

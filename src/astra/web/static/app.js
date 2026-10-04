@@ -838,6 +838,9 @@ async function deleteNode() {
   state.selectedId = null;
   await reloadTree();
   clearPacketForm();
+  clearFieldForm();
+  await loadFields();
+  await loadMappings();
   setStatus("Deleted " + node.name, false);
 }
 
