@@ -511,19 +511,20 @@ async function saveField() {
     qty: Number($("field-qty").value),
     override: $("field-override").checked,
   };
+  let saved;
   if (state.fieldId === null) {
     if (seqRaw !== "") {
       body.seq = Number(seqRaw);
     }
-    await api("/api/vartypes/" + state.packet.var_type_id + "/fields", {
+    saved = await api("/api/vartypes/" + state.packet.var_type_id + "/fields", {
       method: "POST",
       json: body,
     });
   } else {
     body.seq = seqRaw === "" ? null : Number(seqRaw);
-    await api("/api/fields/" + state.fieldId, { method: "PATCH", json: body });
+    saved = await api("/api/fields/" + state.fieldId, { method: "PATCH", json: body });
   }
-  state.fieldId = null;
+  state.fieldId = saved.id;
   await loadFields();
   setStatus("Saved field.", false);
 }
@@ -558,12 +559,10 @@ async function saveDevice() {
     ipv4: $("device-ipv4").value.trim(),
     port: Number($("device-port").value),
   };
-  if (state.deviceId === null) {
-    await api("/api/devices", { method: "POST", json: body });
-  } else {
-    await api("/api/devices/" + state.deviceId, { method: "PATCH", json: body });
-  }
-  state.deviceId = null;
+  const saved = state.deviceId === null
+    ? await api("/api/devices", { method: "POST", json: body })
+    : await api("/api/devices/" + state.deviceId, { method: "PATCH", json: body });
+  state.deviceId = saved.id;
   await loadDevices();
   setStatus("Saved device.", false);
 }
@@ -604,7 +603,7 @@ async function saveServer() {
         method: "PATCH",
         json: serverBody($("server-password").value !== ""),
       });
-  state.serverId = null;
+  state.serverId = saved.id;
   await loadServers();
   setStatus("Saved server " + saved.name, false);
 }

@@ -318,8 +318,13 @@ class ConfigRepo:
         return updated
 
     def delete_node(self, node_id: int) -> None:
-        if self.node(node_id) is None:
+        node = self.node(node_id)
+        if node is None:
             raise ConfigError("not_found")
+        # spdelete walks children for icons 2-10 only. A vehicle has no
+        # parentid foreign key, so deleting that row alone orphans the subtree.
+        if node["icon_id"] == ICON_VEHICLE:
+            self._exec("SELECT spdeletenode(%s)", (node_id,))
         self._exec("SELECT spdelete(%s)", (node_id,))
 
     def packet(self, node_id: int) -> dict[str, Any] | None:

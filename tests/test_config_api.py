@@ -272,6 +272,31 @@ def test_tree_packet_fields_sizes_and_stream(
         _cleanup(database_url, root_id, None)
 
 
+def test_deleting_a_vehicle_removes_its_children(
+    client: TestClient,
+    database_url: str,
+) -> None:
+    root_id: int | None = None
+    _wipe_named_fixtures(database_url)
+    try:
+        vehicle = client.post("/api/tree", json={"name": "p6-vehicle", "icon_id": 1})
+        assert vehicle.status_code == 201
+        root_id = vehicle.json()["id"]
+        stage = client.post(
+            "/api/tree",
+            json={"name": "p6-stage", "parent_id": root_id, "icon_id": 2},
+        )
+        assert stage.status_code == 201
+        removed = client.delete(f"/api/tree/{root_id}")
+        assert removed.status_code == 204
+        names = [row["name"] for row in client.get("/api/tree").json()]
+        assert "p6-vehicle" not in names
+        assert "p6-stage" not in names
+        root_id = None
+    finally:
+        _cleanup(database_url, root_id, None)
+
+
 def test_create_seq_is_a_sibling_position(client: TestClient, database_url: str) -> None:
     root_id: int | None = None
     _wipe_named_fixtures(database_url)
