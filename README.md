@@ -21,7 +21,9 @@ does not apply either step. The default IRIG106 minor frame is the 349-byte
 database layout in `docs/CODEC_DB_ANSWERS.md`. The TMoIP decoder reassembles
 `packet_stream` and forwards `id || body` to the configured bridge port.
 The exporter still raises `NotImplementedError`.
-The web app is FastAPI and answers `GET /health` only.
+The web app is FastAPI. `GET /health` is open. `/api` is the configurator
+and test-manager JSON API and requires `ASTRA_WEB_TOKEN`. Server passwords
+are write-only. HTML screens are not served yet.
 
 ## License
 
@@ -90,7 +92,7 @@ CPython 3.12, Ubuntu 24.04's default `python3` on amd64 and arm64.
 | Piece | Choice |
 | --- | --- |
 | Build | hatchling, `src/` layout |
-| HTTP | FastAPI and uvicorn. SQLAlchemy is not a dependency until the web app has CRUD |
+| HTTP | FastAPI and uvicorn. The operator API uses psycopg text, the same as the other services. SQLAlchemy is not a dependency |
 | UDP | stdlib `asyncio` when the bridge is ported |
 | PostgreSQL | psycopg 3 with the `binary` extra. Schema changes after this baseline are planned for Alembic; the verified scripts are applied with `psql` |
 | OPC UA | asyncua 2.x, imported by `astra.opcua` |
@@ -154,6 +156,8 @@ pytest
 test loads `01_schema.sql` and `03_programmability.sql` if the functions are
 not already there, then checks schemas, collations, and
 `config.spcalcvartypesizes` / `testlog.spimportvalues`.
+`tests/test_config_api.py` calls the operator API against that database,
+including a write-only server password. It skips the same way.
 
 Oracle fixtures are described in `fixtures/README.md`.
 

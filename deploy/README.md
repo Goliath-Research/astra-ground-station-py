@@ -10,7 +10,7 @@ were VCL programs rather than services.
 | `astra-bridge.service` | `astra-bridge` | UDP bridge, `.DAT` logging, test poll, and the in-process OPC UA server. Idle until the bridge is ported. |
 | `astra-tmoip.service` | `astra-tmoip` | Minor-frame reassembly. Idle until phase 4. |
 | `astra-exporter.service` | `astra-exporter` | `Jobs` poll and `testlog` load. Idle until phase 5. |
-| `astra-web.service` | `astra-web` | FastAPI. Serves `GET /health` only. |
+| `astra-web.service` | `astra-web` | FastAPI. `GET /health` is open. `/api` needs `ASTRA_WEB_TOKEN`. |
 
 `astra.codec`, `astra.binlog`, `astra.db`, and `astra.opcua` are libraries.
 `astra.cli` is three commands (`generate`, `device`, `tm_encoder`), not units.

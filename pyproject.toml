@@ -20,6 +20,7 @@ dependencies = [
 
 [project.optional-dependencies]
 dev = [
+    "httpx>=0.27",
     "hypothesis>=6.112",
     "jsonschema>=4.23",
     "mypy>=1.14",
