@@ -5,10 +5,10 @@ that ``SavePacket`` has filled with zeros. Bit 0 of a value is the next
 least-significant bit of the next byte, and multi-byte values continue
 little-endian. Q types are the raw integer (``SaveValue`` does not scale).
 
-Out-of-range field values saturate to the type's limits. Null packs as 0.
-Delphi ``SaveValue`` kept the low bits (300 as ``u8`` is ``2c``); that
-behavior is ``overflow="wrap"`` and is not the default. A checksum uses
-``truncate_checksum`` and keeps its low bits. This payload has no checksum.
+Out-of-range integers keep the low bits (300 as ``u8`` is ``2c``). Null
+packs as 0. ``overflow="clip"`` saturates a field to its type limits.
+A checksum uses ``truncate_checksum`` and keeps its low bits. This payload
+has no checksum.
 """
 
 import math
@@ -31,12 +31,12 @@ def pack_flat(
     layout: Sequence[FlatField],
     values: Sequence[Value],
     *,
-    overflow: Overflow = "clip",
+    overflow: Overflow = "wrap",
 ) -> bytes:
     """Pack ``values`` in ``layout`` order into a zeroed payload.
 
-    ``overflow="clip"`` saturates each field to its type. ``overflow="wrap"``
-    is the legacy Delphi low-bit truncation.
+    ``overflow="wrap"`` (the default) keeps the low bits the way Delphi
+    ``SaveValue`` did. ``overflow="clip"`` saturates each field to its type.
     """
     mode = _check_overflow(overflow)
     if len(layout) != len(values):
@@ -77,13 +77,13 @@ def pack_unsigned_bits(
     widths: Sequence[int],
     values: Sequence[int | None],
     *,
-    overflow: Overflow = "clip",
+    overflow: Overflow = "wrap",
 ) -> bytes:
     """Pack unsigned integers of explicit bit widths.
 
     Used for minor-frame fields whose widths come from the database rather
-    than from ``TVehicleDataTypes``. Null is 0. The default saturates to
-    ``[0, 2^width-1]``. ``overflow="wrap"`` keeps the low bits.
+    than from ``TVehicleDataTypes``. Null is 0. The default keeps the low
+    bits. ``overflow="clip"`` saturates to ``[0, 2^width-1]``.
     """
     mode = _check_overflow(overflow)
     if len(widths) != len(values):
@@ -100,9 +100,9 @@ def pack_unsigned_bits(
 def truncate_checksum(total: int, width: int) -> int:
     """Keep the low ``width`` bits of a checksum or accumulator.
 
-    Field values saturate. A checksum does not: the sum is truncated to the
-    field width. A Chapter 10 checksum uses this when that path is
-    implemented. The live UDP payload has no checksum of its own.
+    The sum is truncated to the field width. A Chapter 10 checksum uses this
+    when that path is implemented. The live UDP payload has no checksum of
+    its own.
     """
     if isinstance(total, bool) or not isinstance(total, int):
         raise CodecError(f"checksum total must be an int, got {total!r}")

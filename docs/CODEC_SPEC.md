@@ -19,17 +19,16 @@ live path.
 `TVehicleDataType.SaveValue` (487-640) stores the in-memory value.
 `SaveSingle` / `SaveDouble` (598-630) are IEEE-754, including NaN. Q types
 are not scaled: an `i32q8` of 256 is the integer 256. `IsValidValue`
-(185-188) turns null into 0. Delphi kept the low bits of the destination
-width (`{$R+}` is not enabled): 300 as `u8` is `2c`. The transcribed vector
-`u8_out_of_range_wraps` records that byte. The codec default is clip:
-unsigned `uN` saturates to `[0, 2^N-1]`, signed `iN` (and the Q integers of
-the same width) to `[-2^(N-1), 2^(N-1)-1]`, a bool is 0 or 1 with any
-non-zero integer becoming 1, and a finite float outside its type's finite
-range saturates to that extreme. NaN and infinities are encodings the type
-can store, so they pass through. 300 as `u8` therefore packs as `ff`.
-`pack(..., overflow="wrap")` is the legacy low-bit mode and is what still
-matches `u8_out_of_range_wraps`. A non-numeric value raises; the exception
-class is not named in the source.
+(185-188) turns null into 0. Out-of-range integers keep the low bits of the
+destination width (`{$R+}` is not enabled): 300 as `u8` is `2c`. The
+transcribed vector `u8_out_of_range_wraps` records that byte, and it is
+what `pack` produces. `overflow="clip"` saturates instead: unsigned `uN`
+to `[0, 2^N-1]`, signed `iN` (and the Q integers of the same width) to
+`[-2^(N-1), 2^(N-1)-1]`, a bool to 0 or 1 with any non-zero integer
+becoming 1, and a finite float outside its type's finite range to that
+extreme. NaN and infinities are encodings the type can store, so they pass
+through. A non-numeric value raises; the exception class is not named in
+the source.
 
 A checksum or accumulator keeps the low bits of the checksum field
 (`truncate_checksum`). That is the rule for a Chapter 10 checksum when one
@@ -183,6 +182,10 @@ and sends the packed IRIG106 packet with no id prefix (272) to listen port
 The other questions the Delphi source left open are answered in
 `docs/CODEC_DB_ANSWERS.md`.
 
+- Whether rocket firmware clamps, wraps, or rejects out-of-range values
+  before sending. The database has no min, max, or CHECK constraint.
+  `range_variables` is the test range, not a value range. The codec keeps
+  the low bits (300 as u8 is `2c`).
 - The exception class for a non-numeric value. The codec raises `CodecError`.
 - Chapter 10 sync and TMATS. They are present in unused files and are never
   checked on the live path. A Chapter 10 checksum, when implemented, keeps

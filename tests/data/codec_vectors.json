@@ -1,5 +1,5 @@
 {
-  "note": "Transcribed from astra-ground-station docs/codec_vectors.json (PR #6). u8_out_of_range_wraps records Delphi low-bit wrap: 300 as u8 is 2c. The codec default is clip, so that value packs as ff. overflow=\"wrap\" still reproduces 2c.",
+  "note": "Transcribed from astra-ground-station docs/codec_vectors.json (PR #6).",
   "vectors": [
     {
       "id": "bool_false",

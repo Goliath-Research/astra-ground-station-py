@@ -1,8 +1,8 @@
 """Field layout and the pure-Python bit packer.
 
 ``pack`` / ``unpack`` follow ``TVehicleDataType.SaveValue`` and ``LoadValue``
-over ``TBitStream``. Out-of-range field values saturate, and null packs as
-0. ``overflow="wrap"`` is the legacy low-bit mode. ``truncate_checksum``
+over ``TBitStream``. Out-of-range integers keep their low bits, and null
+packs as 0. ``overflow="clip"`` saturates a field. ``truncate_checksum``
 keeps the low bits of a checksum. Mojo is not imported.
 ``ASTRA_NATIVE_BACKEND=mojo`` is rejected until ``pack_records`` exists; the
 flat ``(bit_width, kind)`` layout is the surface that function would take.
@@ -71,13 +71,13 @@ def pack(
     fields: Sequence[Field],
     values: Sequence[Value],
     *,
-    overflow: Overflow = "clip",
+    overflow: Overflow = "wrap",
 ) -> bytes:
     """Pack ``values`` for ``fields`` into a payload.
 
     The buffer is cleared first. Unused bits in the last byte stay zero.
-    Each field saturates to its type unless ``overflow`` is ``"wrap"``,
-    which keeps the low bits the way Delphi ``SaveValue`` did. L2R has no
+    Each field keeps the low bits of its width, the way Delphi ``SaveValue``
+    did. ``overflow="clip"`` saturates to the type instead. L2R has no
     ``TransformationID`` in the migrated database, and this function does
     not call ``transform_output`` or scale a Q type. Transforms run on the
     receive path. A checksum is not computed here; ``truncate_checksum``
