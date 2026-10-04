@@ -8,7 +8,7 @@ Legacy Delphi literals are defaults only.
 import os
 from collections.abc import Mapping
 
-DEFAULT_BRIDGE_PORT = 2357
+DEFAULT_BRIDGE_PORT = 2357  # config.servers.port; device ports default to this
 DEFAULT_STAGE_COUNT = 2
 _MAX_UDP_PORT = 65535
 

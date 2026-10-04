@@ -3,7 +3,8 @@
 ``IdUDPServerUDPRead`` (275-279) drops a frame when ``row_id`` is below the
 last accepted row, when ``row_id`` is greater than ``estimated_row_id + 10``,
 or when ``sf_id > 16``. The raw datagram is logged under
-``FPacketID = 100 * (stage - 1) + 106``.
+``FPacketID = 100 * (stage - 1) + 106`` (106 on stage 1, 206 on stage 2).
+Those log ids are not the database packet ids 1061 and 1062.
 
 ``PushStream`` (304-347) starts a new major frame when ``row_id`` is 0 or
 greater than the last accepted row. A minor frame is consumed only when
@@ -25,7 +26,7 @@ from astra.codec import pack, unpack
 from astra.codec.errors import CodecError
 from astra.codec.types import Field
 from astra.settings import bridge_port
-from astra.tmoip.irig import irig106_fields, require_irig_fields
+from astra.tmoip.irig import IrigRoles, irig106_fields, require_irig_fields
 from astra.tmoip.rate import minor_frame_packet_id
 
 _INT32 = struct.Struct("<i")
@@ -73,6 +74,7 @@ class StageDecoder:
     _buffer: bytearray = field(default_factory=bytearray)
     _target: int = 0
     _fields: tuple[Field, ...] = field(init=False)
+    _roles: IrigRoles = field(init=False)
     _stream: Field = field(init=False)
     log_packet_id: int = field(init=False)
     _bridge_port: int = field(init=False)
@@ -89,7 +91,8 @@ class StageDecoder:
                 raise CodecError(f"enc size for packet {packet_id} must be an integer >= 0")
         chosen = irig106_fields() if self.fields is None else tuple(self.fields)
         self._fields = chosen
-        _sf, _row, self._stream = require_irig_fields(chosen)
+        self._roles = require_irig_fields(chosen)
+        self._stream = self._roles.packet_stream
         self.log_packet_id = minor_frame_packet_id(self.stage)
         self._bridge_port = bridge_port(self.environ)
 
@@ -97,13 +100,14 @@ class StageDecoder:
         """Handle one minor-frame UDP payload (no id prefix)."""
         self.logged.append(LoggedMinorFrame(self.log_packet_id, bytes(datagram)))
         unpacked = unpack(self._fields, datagram)
-        sf_id = _as_int("sf_id", unpacked[0])
-        row_id = _as_int("row_id", unpacked[1])
+        sf_id = _as_int("sf_id", unpacked[self._roles.sf_index])
+        row_id = _as_int("row_id", unpacked[self._roles.row_index])
         too_early = row_id < self.last_row_id
         too_late = row_id > self.estimated_row_id + ROW_JUMP
         if too_early or too_late or sf_id > MAX_SF_ID:
             return
-        stream_values = unpacked[2 : 2 + self._stream.qty]
+        start = self._roles.stream_index
+        stream_values = unpacked[start : start + self._stream.qty]
         plain = Field(self._stream.name, self._stream.type_id, qty=self._stream.qty)
         self.push_stream(sf_id, row_id, pack((plain,), stream_values))
 

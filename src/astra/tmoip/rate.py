@@ -3,14 +3,26 @@
 ``BuildPacketStream`` (194-195) tests the rule before ``Inc(Sequence)``
 (208). ``Sequence`` starts at 0 (145). A packet rate of 0 is always due.
 An IRIG rate of 0 is a divide by zero.
+
+Per-packet ``Rate`` and ``Send`` are not in the database. The encoder form
+starts every packet at ``Send = false`` and ``Rate = 0``. Rate 0 with Send
+on is included in every major frame. The form's base rate (``speRate``)
+defaults to 100 Hz. ``config.frequencies`` lists 200 Hz (fundamental loop),
+1 Hz, 10 Hz, and 400 Hz (IRIG frame frequency).
 """
+
+# _AstraTMEncoder.dfm speRate. Timer interval is round(1000/100) = 10 ms.
+DEFAULT_ENCODER_RATE_HZ = 100
+# config.frequencies, in id order.
+CONFIG_FREQUENCIES_HZ = (200, 1, 10, 400)
 
 
 def minor_frame_packet_id(stage: int) -> int:
     """Return the packet id the decoder logs for ``stage``.
 
     ``TAstraStageDecoder.Create`` (AstraTMoIP/AstraDecoder.pas 138) sets
-    ``FPacketID = 100 * (stage - 1) + 106``.
+    ``FPacketID = 100 * (stage - 1) + 106``. Stage 1 logs 106 and stage 2
+    logs 206. Those are not the database packet ids 1061 and 1062.
     """
     if isinstance(stage, bool) or not isinstance(stage, int) or stage < 1:
         raise ValueError(f"stage must be an integer >= 1, got {stage!r}")

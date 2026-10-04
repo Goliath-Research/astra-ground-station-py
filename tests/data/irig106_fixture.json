@@ -1,0 +1,214 @@
+{
+ "description": "Real IRIG106 minor-frame layout from the migrated AstraConfig DB (config.vartypes 421 [Stage 1, node 6563] and 453 [Stage 2, node 6596]; identical apart from row ids). Leaves flattened exactly as TAstraVarPacket.LoadFields does (spGetVarTypeFields order: Seq NULLS FIRST, Name; nested record leaves prefixed parent_). No leaf has Override, so no ovr_ bits. Packed with LSB-first bit order, little-endian, same rules as spec/codec_vectors.json (the packer used reproduces all 28 packing vectors there).",
+ "bit_order": "lsb_first_within_each_byte",
+ "byte_order": "little_endian",
+ "source": {
+  "db": "AstraConfig (postgres migration, schema config)",
+  "vartype_ids": {"stage1": 421, "stage2": 453},
+  "packet_ids": {"stage1": 1061, "stage2": 1062},
+  "node_ids": {"stage1": 6563, "stage2": 6596},
+  "smart_node_ids": {"stage1_TMencoder": 6562, "stage2_TMencoder": 6595},
+  "db_encsize_bytes": 349,
+  "db_decsize_bytes": 412,
+  "packed_bits": 2792,
+  "nested_vartypes": {
+   "FAP": {"stage1": 422, "stage2": 454, "enc_bytes": 20, "bits": 160},
+   "FSS": {"stage1": 423, "stage2": 455, "enc_bytes": 2, "bits": 12},
+   "ITS": {"stage1": 424, "stage2": 456, "enc_bytes": 1, "bits": 8}
+  }
+ },
+ "key_fields": {
+  "sf_id": {"type": "u8", "type_id": 2, "bit_offset": 192, "byte_offset": 24},
+  "row_id": {"type": "u32", "type_id": 5, "bit_offset": 200, "byte_offset": 25},
+  "packet_stream": {"type": "u8", "type_id": 2, "qty": 200, "bit_offset": 1192, "byte_offset": 149}
+ },
+ "layouts": {
+  "irig106_real": [
+   {"name": "fap_type", "type_id": 2, "type": "u8", "bits": 8, "qty": 1, "override": false},
+   {"name": "fap_seq_counter", "type_id": 1, "type": "bool", "bits": 1, "qty": 13, "override": false},
+   {"name": "fap_bytes_in_packet", "type_id": 1, "type": "bool", "bits": 1, "qty": 11, "override": false},
+   {"name": "fap_zeroes12", "type_id": 1, "type": "bool", "bits": 1, "qty": 12, "override": false},
+   {"name": "fap_IRIG_time_status_IRIG_present", "type_id": 1, "type": "bool", "bits": 1, "qty": 1, "override": false},
+   {"name": "fap_IRIG_time_status_Reserved", "type_id": 1, "type": "bool", "bits": 1, "qty": 7, "override": false},
+   {"name": "fap_frame_sync_status_Reserved1", "type_id": 1, "type": "bool", "bits": 1, "qty": 1, "override": false},
+   {"name": "fap_frame_sync_status_Reserved2", "type_id": 1, "type": "bool", "bits": 1, "qty": 1, "override": false},
+   {"name": "fap_frame_sync_status_Reserved3", "type_id": 1, "type": "bool", "bits": 1, "qty": 1, "override": false},
+   {"name": "fap_frame_sync_status_MFL", "type_id": 1, "type": "bool", "bits": 1, "qty": 1, "override": false},
+   {"name": "fap_frame_sync_status_MFC", "type_id": 1, "type": "bool", "bits": 1, "qty": 1, "override": false},
+   {"name": "fap_frame_sync_status_MFS", "type_id": 1, "type": "bool", "bits": 1, "qty": 1, "override": false},
+   {"name": "fap_frame_sync_status_FSP", "type_id": 1, "type": "bool", "bits": 1, "qty": 1, "override": false},
+   {"name": "fap_frame_sync_status_Flywheel", "type_id": 1, "type": "bool", "bits": 1, "qty": 1, "override": false},
+   {"name": "fap_frame_sync_status_Idle", "type_id": 1, "type": "bool", "bits": 1, "qty": 1, "override": false},
+   {"name": "fap_frame_sync_status_Lock", "type_id": 1, "type": "bool", "bits": 1, "qty": 1, "override": false},
+   {"name": "fap_frame_sync_status_Check", "type_id": 1, "type": "bool", "bits": 1, "qty": 1, "override": false},
+   {"name": "fap_frame_sync_status_Search", "type_id": 1, "type": "bool", "bits": 1, "qty": 1, "override": false},
+   {"name": "fap_milliseconds_in_the_day", "type_id": 5, "type": "u32", "bits": 32, "qty": 1, "override": false},
+   {"name": "fap_Subframe_id", "type_id": 1, "type": "bool", "bits": 1, "qty": 10, "override": false},
+   {"name": "fap_words_per_minor_frame", "type_id": 4, "type": "u16", "bits": 16, "qty": 1, "override": false},
+   {"name": "fap_bits_per_word", "type_id": 1, "type": "bool", "bits": 1, "qty": 6, "override": false},
+   {"name": "fap_bitrate", "type_id": 5, "type": "u32", "bits": 32, "qty": 1, "override": false},
+   {"name": "fsp", "type_id": 5, "type": "u32", "bits": 32, "qty": 1, "override": false},
+   {"name": "sf_id", "type_id": 2, "type": "u8", "bits": 8, "qty": 1, "override": false},
+   {"name": "row_id", "type_id": 5, "type": "u32", "bits": 32, "qty": 1, "override": false},
+   {"name": "range_variables", "type_id": 2, "type": "u8", "bits": 8, "qty": 120, "override": false},
+   {"name": "packet_stream", "type_id": 2, "type": "u8", "bits": 8, "qty": 200, "override": false}
+  ]
+ },
+ "layout_detail_stage1": [
+  {"name": "fap_type", "type_id": 2, "type": "u8", "bits": 8, "qty": 1, "override": false, "transformation_id": null, "bit_offset": 0, "db_field_id": 3215},
+  {"name": "fap_seq_counter", "type_id": 1, "type": "bool", "bits": 1, "qty": 13, "override": false, "transformation_id": null, "bit_offset": 8, "db_field_id": 3216},
+  {"name": "fap_bytes_in_packet", "type_id": 1, "type": "bool", "bits": 1, "qty": 11, "override": false, "transformation_id": null, "bit_offset": 21, "db_field_id": 3242},
+  {"name": "fap_zeroes12", "type_id": 1, "type": "bool", "bits": 1, "qty": 12, "override": false, "transformation_id": null, "bit_offset": 32, "db_field_id": 3243},
+  {"name": "fap_IRIG_time_status_IRIG_present", "type_id": 1, "type": "bool", "bits": 1, "qty": 1, "override": false, "transformation_id": null, "bit_offset": 44, "db_field_id": 3234},
+  {"name": "fap_IRIG_time_status_Reserved", "type_id": 1, "type": "bool", "bits": 1, "qty": 7, "override": false, "transformation_id": null, "bit_offset": 45, "db_field_id": 3235},
+  {"name": "fap_frame_sync_status_Reserved1", "type_id": 1, "type": "bool", "bits": 1, "qty": 1, "override": false, "transformation_id": null, "bit_offset": 52, "db_field_id": 3218},
+  {"name": "fap_frame_sync_status_Reserved2", "type_id": 1, "type": "bool", "bits": 1, "qty": 1, "override": false, "transformation_id": null, "bit_offset": 53, "db_field_id": 3219},
+  {"name": "fap_frame_sync_status_Reserved3", "type_id": 1, "type": "bool", "bits": 1, "qty": 1, "override": false, "transformation_id": null, "bit_offset": 54, "db_field_id": 3220},
+  {"name": "fap_frame_sync_status_MFL", "type_id": 1, "type": "bool", "bits": 1, "qty": 1, "override": false, "transformation_id": null, "bit_offset": 55, "db_field_id": 3221},
+  {"name": "fap_frame_sync_status_MFC", "type_id": 1, "type": "bool", "bits": 1, "qty": 1, "override": false, "transformation_id": null, "bit_offset": 56, "db_field_id": 3222},
+  {"name": "fap_frame_sync_status_MFS", "type_id": 1, "type": "bool", "bits": 1, "qty": 1, "override": false, "transformation_id": null, "bit_offset": 57, "db_field_id": 3223},
+  {"name": "fap_frame_sync_status_FSP", "type_id": 1, "type": "bool", "bits": 1, "qty": 1, "override": false, "transformation_id": null, "bit_offset": 58, "db_field_id": 3224},
+  {"name": "fap_frame_sync_status_Flywheel", "type_id": 1, "type": "bool", "bits": 1, "qty": 1, "override": false, "transformation_id": null, "bit_offset": 59, "db_field_id": 3225},
+  {"name": "fap_frame_sync_status_Idle", "type_id": 1, "type": "bool", "bits": 1, "qty": 1, "override": false, "transformation_id": null, "bit_offset": 60, "db_field_id": 3226},
+  {"name": "fap_frame_sync_status_Lock", "type_id": 1, "type": "bool", "bits": 1, "qty": 1, "override": false, "transformation_id": null, "bit_offset": 61, "db_field_id": 3227},
+  {"name": "fap_frame_sync_status_Check", "type_id": 1, "type": "bool", "bits": 1, "qty": 1, "override": false, "transformation_id": null, "bit_offset": 62, "db_field_id": 3228},
+  {"name": "fap_frame_sync_status_Search", "type_id": 1, "type": "bool", "bits": 1, "qty": 1, "override": false, "transformation_id": null, "bit_offset": 63, "db_field_id": 3229},
+  {"name": "fap_milliseconds_in_the_day", "type_id": 5, "type": "u32", "bits": 32, "qty": 1, "override": false, "transformation_id": null, "bit_offset": 64, "db_field_id": 3217},
+  {"name": "fap_Subframe_id", "type_id": 1, "type": "bool", "bits": 1, "qty": 10, "override": false, "transformation_id": null, "bit_offset": 96, "db_field_id": 3231},
+  {"name": "fap_words_per_minor_frame", "type_id": 4, "type": "u16", "bits": 16, "qty": 1, "override": false, "transformation_id": null, "bit_offset": 106, "db_field_id": 3232},
+  {"name": "fap_bits_per_word", "type_id": 1, "type": "bool", "bits": 1, "qty": 6, "override": false, "transformation_id": null, "bit_offset": 122, "db_field_id": 3238},
+  {"name": "fap_bitrate", "type_id": 5, "type": "u32", "bits": 32, "qty": 1, "override": false, "transformation_id": null, "bit_offset": 128, "db_field_id": 3233},
+  {"name": "fsp", "type_id": 5, "type": "u32", "bits": 32, "qty": 1, "override": false, "transformation_id": null, "bit_offset": 160, "db_field_id": 3244},
+  {"name": "sf_id", "type_id": 2, "type": "u8", "bits": 8, "qty": 1, "override": false, "transformation_id": null, "bit_offset": 192, "db_field_id": 3245},
+  {"name": "row_id", "type_id": 5, "type": "u32", "bits": 32, "qty": 1, "override": false, "transformation_id": null, "bit_offset": 200, "db_field_id": 3246},
+  {"name": "range_variables", "type_id": 2, "type": "u8", "bits": 8, "qty": 120, "override": false, "transformation_id": null, "bit_offset": 232, "db_field_id": 3247},
+  {"name": "packet_stream", "type_id": 2, "type": "u8", "bits": 8, "qty": 200, "override": false, "transformation_id": null, "bit_offset": 1192, "db_field_id": 3248}
+ ],
+ "layout_detail_stage2_field_ids": [3620, 3621, 3644, 3645, 3639, 3640, 3623, 3624, 3625, 3626, 3627, 3628, 3629, 3630, 3631, 3632, 3633, 3634, 3622, 3636, 3637, 3642, 3638, 3646, 3647, 3648, 3649, 3650],
+ "vectors": [
+  {
+   "id": "irig106_stage1_tmstats1_seq0",
+   "description": "Stage 1 TM encoder, only TMstats1 (Packets.ID 1060, EncSize 48 bytes) has Send=True. Sequence was 0, so the packet is included; Sequence becomes 1, SubFrameID 1. packet_stream = int32 LE 1060 + 48 zero payload bytes + 148 zero fill. Every other field is 0 (BuildEmptyPacket).",
+   "layout_ref": "irig106_real",
+   "values": {
+    "sf_id": 1,
+    "row_id": 1,
+    "packet_stream": [36, 4, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+   },
+   "bit_length": 2792,
+   "byte_length": 349,
+   "expected_hex": "00000000000000000000000000000000000000000000000001010000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000002404000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+   "send_packets": [
+    {"packet_id": 1060, "name": "TMstats1", "enc_size_bytes": 48}
+   ],
+   "irig_rate_hz": 100,
+   "sequence_before_increment": 0
+  },
+  {
+   "id": "irig106_stage1_r2l_frame_1_of_4",
+   "description": "Stage 1 TM encoder, only R2L (Packets.ID 2, EncSize 753) has Send=True. Stream = 4 + 753 = 757 bytes -> 4 minor frames (200,200,200,157). This is frame 1: sf_id=1, row_id=1, 200 stream bytes then zero fill.",
+   "layout_ref": "irig106_real",
+   "values": {
+    "sf_id": 1,
+    "row_id": 1,
+    "packet_stream": [2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+   },
+   "bit_length": 2792,
+   "byte_length": 349,
+   "expected_hex": "00000000000000000000000000000000000000000000000001010000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000200000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+   "send_packets": [
+    {"packet_id": 2, "name": "R2L", "enc_size_bytes": 753}
+   ],
+   "stream_bytes_in_frame": 200
+  },
+  {
+   "id": "irig106_stage1_r2l_frame_2_of_4",
+   "description": "Stage 1 TM encoder, only R2L (Packets.ID 2, EncSize 753) has Send=True. Stream = 4 + 753 = 757 bytes -> 4 minor frames (200,200,200,157). This is frame 2: sf_id=2, row_id=1, 200 stream bytes then zero fill.",
+   "layout_ref": "irig106_real",
+   "values": {
+    "sf_id": 2,
+    "row_id": 1,
+    "packet_stream": [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+   },
+   "bit_length": 2792,
+   "byte_length": 349,
+   "expected_hex": "00000000000000000000000000000000000000000000000002010000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+   "send_packets": [
+    {"packet_id": 2, "name": "R2L", "enc_size_bytes": 753}
+   ],
+   "stream_bytes_in_frame": 200
+  },
+  {
+   "id": "irig106_stage1_r2l_frame_3_of_4",
+   "description": "Stage 1 TM encoder, only R2L (Packets.ID 2, EncSize 753) has Send=True. Stream = 4 + 753 = 757 bytes -> 4 minor frames (200,200,200,157). This is frame 3: sf_id=3, row_id=1, 200 stream bytes then zero fill.",
+   "layout_ref": "irig106_real",
+   "values": {
+    "sf_id": 3,
+    "row_id": 1,
+    "packet_stream": [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+   },
+   "bit_length": 2792,
+   "byte_length": 349,
+   "expected_hex": "00000000000000000000000000000000000000000000000003010000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+   "send_packets": [
+    {"packet_id": 2, "name": "R2L", "enc_size_bytes": 753}
+   ],
+   "stream_bytes_in_frame": 200
+  },
+  {
+   "id": "irig106_stage1_r2l_frame_4_of_4",
+   "description": "Stage 1 TM encoder, only R2L (Packets.ID 2, EncSize 753) has Send=True. Stream = 4 + 753 = 757 bytes -> 4 minor frames (200,200,200,157). This is frame 4: sf_id=4, row_id=1, 157 stream bytes then zero fill.",
+   "layout_ref": "irig106_real",
+   "values": {
+    "sf_id": 4,
+    "row_id": 1,
+    "packet_stream": [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+   },
+   "bit_length": 2792,
+   "byte_length": 349,
+   "expected_hex": "00000000000000000000000000000000000000000000000004010000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+   "send_packets": [
+    {"packet_id": 2, "name": "R2L", "enc_size_bytes": 753}
+   ],
+   "stream_bytes_in_frame": 157
+  },
+  {
+   "id": "irig106_bit_position_probe",
+   "description": "Every leaf non-zero, to check bit offsets. Bool arrays are given element-wise; element j is streamed j-th (LSB-first), so a bool[13] counter value V is elements [bit0..bit12] of V only if the firmware uses that convention (the DB does not say). fsp uses the IRIG-106 32-bit sync pattern 0xFE6B2840 as a value; the DB has no default for it.",
+   "layout_ref": "irig106_real",
+   "values": {
+    "fap_type": 4,
+    "fap_seq_counter": [false, false, true, true, true, true, false, true, false, true, false, true, true],
+    "fap_bytes_in_packet": [true, false, true, true, true, false, true, false, true, false, false],
+    "fap_zeroes12": [false, false, false, false, false, false, false, false, false, false, false, false],
+    "fap_IRIG_time_status_IRIG_present": true,
+    "fap_IRIG_time_status_Reserved": [false, false, false, false, false, false, false],
+    "fap_frame_sync_status_Reserved1": false,
+    "fap_frame_sync_status_Reserved2": false,
+    "fap_frame_sync_status_Reserved3": false,
+    "fap_frame_sync_status_MFL": true,
+    "fap_frame_sync_status_MFC": false,
+    "fap_frame_sync_status_MFS": true,
+    "fap_frame_sync_status_FSP": false,
+    "fap_frame_sync_status_Flywheel": true,
+    "fap_frame_sync_status_Idle": false,
+    "fap_frame_sync_status_Lock": true,
+    "fap_frame_sync_status_Check": true,
+    "fap_frame_sync_status_Search": false,
+    "fap_milliseconds_in_the_day": 16909060,
+    "fap_Subframe_id": [true, false, true, false, false, false, false, false, false, false],
+    "fap_words_per_minor_frame": 4660,
+    "fap_bits_per_word": [false, false, false, false, true, false],
+    "fap_bitrate": 10000000,
+    "fsp": 4268435520,
+    "sf_id": 3,
+    "row_id": 2309737967,
+    "range_variables": [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51, 52, 53, 54, 55, 56, 57, 58, 59, 60, 61, 62, 63, 64, 65, 66, 67, 68, 69, 70, 71, 72, 73, 74, 75, 76, 77, 78, 79, 80, 81, 82, 83, 84, 85, 86, 87, 88, 89, 90, 91, 92, 93, 94, 95, 96, 97, 98, 99, 100, 101, 102, 103, 104, 105, 106, 107, 108, 109, 110, 111, 112, 113, 114, 115, 116, 117, 118, 119],
+    "packet_stream": [255, 254, 253, 252, 251, 250, 249, 248, 247, 246, 245, 244, 243, 242, 241, 240, 239, 238, 237, 236, 235, 234, 233, 232, 231, 230, 229, 228, 227, 226, 225, 224, 223, 222, 221, 220, 219, 218, 217, 216, 215, 214, 213, 212, 211, 210, 209, 208, 207, 206, 205, 204, 203, 202, 201, 200, 199, 198, 197, 196, 195, 194, 193, 192, 191, 190, 189, 188, 187, 186, 185, 184, 183, 182, 181, 180, 179, 178, 177, 176, 175, 174, 173, 172, 171, 170, 169, 168, 167, 166, 165, 164, 163, 162, 161, 160, 159, 158, 157, 156, 155, 154, 153, 152, 151, 150, 149, 148, 147, 146, 145, 144, 143, 142, 141, 140, 139, 138, 137, 136, 135, 134, 133, 132, 131, 130, 129, 128, 127, 126, 125, 124, 123, 122, 121, 120, 119, 118, 117, 116, 115, 114, 113, 112, 111, 110, 109, 108, 107, 106, 105, 104, 103, 102, 101, 100, 99, 98, 97, 96, 95, 94, 93, 92, 91, 90, 89, 88, 87, 86, 85, 84, 83, 82, 81, 80, 79, 78, 77, 76, 75, 74, 73, 72, 71, 70, 69, 68, 67, 66, 65, 64, 63, 62, 61, 60, 59, 58, 57, 56]
+   },
+   "bit_length": 2792,
+   "byte_length": 349,
+   "expected_hex": "04bcba2b0010806a0403020105d048408096980040286bfe03efcdab89000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f202122232425262728292a2b2c2d2e2f303132333435363738393a3b3c3d3e3f404142434445464748494a4b4c4d4e4f505152535455565758595a5b5c5d5e5f606162636465666768696a6b6c6d6e6f7071727374757677fffefdfcfbfaf9f8f7f6f5f4f3f2f1f0efeeedecebeae9e8e7e6e5e4e3e2e1e0dfdedddcdbdad9d8d7d6d5d4d3d2d1d0cfcecdcccbcac9c8c7c6c5c4c3c2c1c0bfbebdbcbbbab9b8b7b6b5b4b3b2b1b0afaeadacabaaa9a8a7a6a5a4a3a2a1a09f9e9d9c9b9a999897969594939291908f8e8d8c8b8a898887868584838281807f7e7d7c7b7a797877767574737271706f6e6d6c6b6a696867666564636261605f5e5d5c5b5a595857565554535251504f4e4d4c4b4a494847464544434241403f3e3d3c3b3a3938"
+  }
+ ]
+}

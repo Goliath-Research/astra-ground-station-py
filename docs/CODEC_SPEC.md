@@ -20,8 +20,19 @@ live path.
 `SaveSingle` / `SaveDouble` (598-630) are IEEE-754, including NaN. Q types
 are not scaled: an `i32q8` of 256 is the integer 256. `IsValidValue`
 (185-188) turns null into 0. Out-of-range integers keep the low bits of the
-destination width (`{$R+}` is not enabled): 300 as `u8` is `2c`. A
-non-numeric value raises; the exception class is not named in the source.
+destination width (`{$R+}` is not enabled): 300 as `u8` is `2c`. The
+transcribed vector `u8_out_of_range_wraps` records that byte, and it is
+what `pack` produces. `overflow="clip"` saturates instead: unsigned `uN`
+to `[0, 2^N-1]`, signed `iN` (and the Q integers of the same width) to
+`[-2^(N-1), 2^(N-1)-1]`, a bool to 0 or 1 with any non-zero integer
+becoming 1, and a finite float outside its type's finite range to that
+extreme. NaN and infinities are encodings the type can store, so they pass
+through. A non-numeric value raises; the exception class is not named in
+the source.
+
+A checksum or accumulator keeps the low bits of the checksum field
+(`truncate_checksum`). That is the rule for a Chapter 10 checksum when one
+is implemented. The live UDP payload still has no checksum.
 
 `u12` `0x0ABC` (2748) packs as `bc0a`. The same value after a true bool
 packs as `7915`.
@@ -88,7 +99,9 @@ Samples `(id, x, y, y_f64_le_hex)`, none of which take the OPC substitution:
 `(14, 2500.0, 2.5, 0000000000000440)`.
 
 `TransformInput` (1102-1128), the id-1 cube-root inverse, is never called.
-L2R packs OPC values as they arrive.
+L2R packs OPC values as they arrive. The migrated database has no
+`TransformationID` on any L2R field, so the send path never inverse-transforms
+engineering units. See `docs/CODEC_DB_ANSWERS.md`.
 
 `AstraInpPopper.SyncWrite` (95-120) runs `TransformOutput`, then if the OPC
 type is `Single` or `Double` and `v == 0` exactly, sets `v = 1e-7`
@@ -101,10 +114,17 @@ into the packet.
 
 ## Minor frame
 
-The minor frame is a normal Astra packet named IRIG106. `sf_id`, `row_id`,
-and `packet_stream` have database-defined types, widths, and array length.
-The vectors' fixture is `sf_id: u8`, `row_id: i32`, `packet_stream: u8[4]`.
-It is packed with `SavePacket`. The bytes inside `packet_stream` come from
+The minor frame is a normal Astra packet named IRIG106. The default layout
+is the migrated config database, and it is the same for Stage 1 and Stage 2:
+`fap` (nested FAP, 160 bits), `fsp` u32, `sf_id` u8, `row_id` u32,
+`range_variables` u8[120], `packet_stream` u8[200]. That is 28 leaves, 2792
+bits, and 349 bytes, with no pad. The codec reads `sf_id`, `row_id`, and
+`packet_stream` by name. The other fields pass through. Offsets and the
+packets that can ride in `packet_stream` are in `docs/CODEC_DB_ANSWERS.md`.
+
+The transcribed vectors in this file use the smaller fixture `sf_id: u8`,
+`row_id: i32`, `packet_stream: u8[4]`. That fixture is not the default. It
+is packed with `SavePacket`. The bytes inside `packet_stream` come from
 the encoder's `PacketStream` buffer.
 
 `AstraTMEncoder/_AstraTMEncoder.pas` `BuildPacketStream` (168-210): before
@@ -157,16 +177,16 @@ and sends the packed IRIG106 packet with no id prefix (272) to listen port
 - `SendAndClearPacket` (410-414) UDP-sends the `id || body` bytes unchanged
   to `127.0.0.1` on the configured bridge port (the Delphi literal is 2357).
 
-## What the Delphi source does not settle
+## What the database does not settle
 
-- The real IRIG106 field types, `Seq` order, and `packet_stream` length.
-- Whether any database row sets `Override` on a record. SQL counts that bit,
-  but `LoadFieldOvrs` does not emit it, so the byte length can disagree.
+The other questions the Delphi source left open are answered in
+`docs/CODEC_DB_ANSWERS.md`.
+
 - Whether rocket firmware clamps, wraps, or rejects out-of-range values
-  before sending.
-- Whether LabVIEW writes engineering units into L2R tags. Those values would
-  be packed raw.
-- The deployed OPC server name and `Servers.Port`.
-- The exception class for a non-numeric value.
-- Chapter 10 checksums, sync, and TMATS. They are present in unused files
-  and are never checked on the live path.
+  before sending. The database has no min, max, or CHECK constraint.
+  `range_variables` is the test range, not a value range. The codec keeps
+  the low bits (300 as u8 is `2c`).
+- The exception class for a non-numeric value. The codec raises `CodecError`.
+- Chapter 10 sync and TMATS. They are present in unused files and are never
+  checked on the live path. A Chapter 10 checksum, when implemented, keeps
+  the low bits of the checksum field.

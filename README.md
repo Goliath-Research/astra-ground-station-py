@@ -17,9 +17,10 @@ bridge publishes.
 The bit packer is a pure-Python reference in `astra.codec`. It does not
 import Mojo. `TransformOutput` and the OPC `1e-7` substitution follow
 `docs/CODEC_SPEC.md` (transcribed from astra-ground-station PR #6). `pack`
-does not apply either step. IRIG106 minor frames are ordinary packets; the
-TMoIP decoder reassembles `packet_stream` and forwards `id || body` to the
-configured bridge port. The exporter still raises `NotImplementedError`.
+does not apply either step. The default IRIG106 minor frame is the 349-byte
+database layout in `docs/CODEC_DB_ANSWERS.md`. The TMoIP decoder reassembles
+`packet_stream` and forwards `id || body` to the configured bridge port.
+The exporter still raises `NotImplementedError`.
 The web app is FastAPI and answers `GET /health` only.
 
 ## License
@@ -35,7 +36,9 @@ the code. It does not publish the repository.
 ```
 docs/MIGRATION.md          copy of the legacy plan; the legacy file wins
 docs/CODEC_SPEC.md         codec rules transcribed from legacy PR #6
+docs/CODEC_DB_ANSWERS.md   codec answers from the migrated config database
 tests/data/codec_vectors.json  29 golden vectors from that same spec
+tests/data/irig106_fixture.json  real IRIG106 layout and six byte vectors
 database/schema/           01_schema.sql then 03_programmability.sql
 deploy/systemd/            bridge, tmoip, exporter, web
 fixtures/oracle/           Win64 harness output (empty until phase 0)
@@ -169,5 +172,5 @@ defaults to 2. Both are set in `deploy/astra.env.example`. Exporter jobs are
 keyed by `(test id, packet id)`; `intf_id` is a generated UUID.
 
 Unresolved questions are in `docs/MIGRATION.md` §7 (EntityDAC hardware editor,
-`TransformInput`, decoder counters, the historical OPC DA server name,
-LabVIEW cutover owner, Mojo license for a client install).
+decoder counters, LabVIEW cutover owner, Mojo license for a client install).
+Codec questions the database cannot answer are in `docs/CODEC_SPEC.md`.

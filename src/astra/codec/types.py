@@ -69,6 +69,7 @@ class Field:
     qty: int = 1
     override: bool = False
     fields: tuple[Field, ...] = ()
+    seq: int | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -115,11 +116,45 @@ def encoded_size(fields: Sequence[Field]) -> int:
 
     Matches the packed payload: ``ceiling(bit_count / 8)`` once. Nested
     records are not padded to a byte on their own. A record-level
-    ``Override`` is not included. ``spcalcvartypesizes`` counts that row, so
-    a database row that sets it can disagree with this length.
+    ``Override`` is not included. ``spcalcvartypesizes`` would count that
+    bit, but the migrated database has no such row: every Override is a
+    leaf, and this length matches stored EncSize.
     """
     bits = encoded_bit_count(fields)
     return (bits + 7) // 8
+
+
+def packed_enc_bytes(leaf_bits: int, override_leaves: int) -> int:
+    """Return EncSize from expanded leaf bits plus one bit per override leaf.
+
+    ``leaf_bits`` already includes array quantity and expanded record
+    arrays. A record-level Override is not added. Round up to a byte.
+    """
+    _require_count("leaf_bits", leaf_bits)
+    _require_count("override_leaves", override_leaves)
+    return (leaf_bits + override_leaves + 7) // 8
+
+
+def field_sort_key(field: Field) -> tuple[bool, int, str]:
+    """Order one field the way ``spGetVarTypeFields`` does.
+
+    SQL Server sorts ``Seq`` ascending with NULLs first, then ``Name``
+    under a case-insensitive collation. A missing ``Seq`` sorts before 0.
+    ``name.casefold()`` is the case-insensitive name key. Python
+    ``sorted`` on the raw name is case-sensitive, so it can disagree.
+    """
+    if field.seq is None:
+        return (False, 0, field.name.casefold())
+    return (True, field.seq, field.name.casefold())
+
+
+def sort_fields(fields: Sequence[Field]) -> tuple[Field, ...]:
+    """Return ``fields`` in legacy ``Seq NULLS FIRST, Name`` order.
+
+    This sorts one level. Nested records keep the order of their own
+    ``fields`` tuple until that tuple is sorted the same way.
+    """
+    return tuple(sorted(fields, key=field_sort_key))
 
 
 def _append_field(
@@ -144,6 +179,11 @@ def _append_field(
         overrides.append(FlatField(f"ovr_{base}", 1, 1, "override"))
 
 
+def _require_count(name: str, value: int) -> None:
+    if isinstance(value, bool) or not isinstance(value, int) or value < 0:
+        raise CodecError(f"{name} must be an integer >= 0, got {value!r}")
+
+
 def _check_field(field: Field) -> None:
     if not isinstance(field.name, str) or field.name == "":
         raise CodecError("field name must be a non-empty string")
@@ -151,6 +191,8 @@ def _check_field(field: Field) -> None:
         raise CodecError(f"{field.name}: qty must be an integer >= 1")
     if not isinstance(field.override, bool):
         raise CodecError(f"{field.name}: override must be a bool")
+    if field.seq is not None and (isinstance(field.seq, bool) or not isinstance(field.seq, int)):
+        raise CodecError(f"{field.name}: seq must be an int or null")
     nested = len(field.fields) > 0
     if nested:
         if field.type_id <= 100:

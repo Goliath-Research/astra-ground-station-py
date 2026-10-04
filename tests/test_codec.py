@@ -9,9 +9,9 @@ into ``docs/CODEC_SPEC.md`` from astra-ground-station PR #6.
   little-endian across bytes. ``u12`` ``0x0ABC`` is ``bc0a``; the same value
   after a true bool is ``7915``.
 - ``AstraVarPacket.pas`` ``SaveValue``: out-of-range integers keep the low
-  bits (300 as ``u8`` is ``2c``). Null becomes 0. Q types are the raw
-  integer (``i32q8`` 256 stays 256). ``f32`` / ``f64`` are IEEE-754,
-  including NaN.
+  bits (300 as ``u8`` is ``2c``). ``overflow="clip"`` saturates instead.
+  Null becomes 0. Q types are the raw integer (``i32q8`` 256 stays 256).
+  ``f32`` / ``f64`` are IEEE-754, including NaN.
 - ``AstraVarPacket.pas`` ``LoadFieldOvrs`` (792-822): one ``ovr_<leaf>``
   bit at the end of the whole flattened field list. An array leaf gets one
   bit. ``Override`` on a record row is not emitted.
@@ -35,6 +35,8 @@ from astra.codec import (
     flatten,
     pack,
     pack_id_payload,
+    pack_unsigned_bits,
+    truncate_checksum,
     unpack,
     unpack_id_payload,
 )
@@ -233,18 +235,85 @@ def test_id_payload_is_a_signed_little_endian_integer() -> None:
     assert unpack_id_payload(pack_id_payload(-1, b""))[0] == -1
 
 
-def test_out_of_range_integers_keep_the_low_bits() -> None:
-    # 300 = 0x12C. SaveValue keeps the low 8 bits: 0x2C.
+def test_out_of_range_values_clip_at_both_bounds() -> None:
+    # Explicit overflow="clip". The default keeps the low bits.
+    # u8 is [0, 255]. 300 wraps to 0x2C and saturates to 255.
+    u8 = (Field("b", 2),)
+    assert pack(u8, [0], overflow="clip") == b"\x00"
+    assert pack(u8, [255], overflow="clip") == b"\xff"
+    assert pack(u8, [-1], overflow="clip") == b"\x00"
+    assert pack(u8, [256], overflow="clip") == b"\xff"
+    assert pack(u8, [300], overflow="clip") == b"\xff"
+    assert unpack(u8, pack(u8, [300], overflow="clip")) == (255,)
+    # u12 is [0, 4095].
+    u12 = (Field("sample", 3),)
+    assert pack(u12, [0], overflow="clip") == bytes.fromhex("0000")
+    assert pack(u12, [4095], overflow="clip") == bytes.fromhex("ff0f")
+    assert pack(u12, [-1], overflow="clip") == bytes.fromhex("0000")
+    assert pack(u12, [4096], overflow="clip") == bytes.fromhex("ff0f")
+    # i8 is [-128, 127]. -200 wraps to +56 and saturates to -128.
+    i8 = (Field("b", 6),)
+    assert pack(i8, [-128], overflow="clip") == bytes.fromhex("80")
+    assert pack(i8, [127], overflow="clip") == bytes.fromhex("7f")
+    assert pack(i8, [-129], overflow="clip") == bytes.fromhex("80")
+    assert pack(i8, [-200], overflow="clip") == bytes.fromhex("80")
+    assert pack(i8, [128], overflow="clip") == bytes.fromhex("7f")
+    assert unpack(i8, pack(i8, [-200], overflow="clip")) == (-128,)
+    # i16 is [-32768, 32767].
+    i16 = (Field("b", 7),)
+    assert unpack(i16, pack(i16, [-32768], overflow="clip")) == (-32768,)
+    assert unpack(i16, pack(i16, [32767], overflow="clip")) == (32767,)
+    assert unpack(i16, pack(i16, [-32769], overflow="clip")) == (-32768,)
+    assert unpack(i16, pack(i16, [32768], overflow="clip")) == (32767,)
+    # Q integers use the same integer limits and are not scaled.
+    assert unpack((Field("q", 13),), pack((Field("q", 13),), [300], overflow="clip")) == (255,)
+    assert unpack((Field("q", 11),), pack((Field("q", 11),), [2**31], overflow="clip")) == (
+        2**31 - 1,
+    )
+    # A bool is 0 or 1. Any non-zero integer is 1, including even values.
+    flag = (Field("flag", 1),)
+    assert pack(flag, [0], overflow="clip") == b"\x00"
+    assert pack(flag, [1], overflow="clip") == b"\x01"
+    assert pack(flag, [2], overflow="clip") == b"\x01"
+    assert pack(flag, [-4], overflow="clip") == b"\x01"
+    assert unpack(flag, pack(flag, [2], overflow="clip")) == (True,)
+    # A finite f32 outside the binary32 range saturates. NaN and inf stay.
+    f32 = (Field("x", 9),)
+    f32_max = struct.unpack("<f", b"\xff\xff\x7f\x7f")[0]
+    assert pack(f32, [1.0], overflow="clip") == struct.pack("<f", 1.0)
+    assert pack(f32, [1e39], overflow="clip") == struct.pack("<f", f32_max)
+    assert pack(f32, [-1e39], overflow="clip") == struct.pack("<f", -f32_max)
+    assert pack(f32, [float("inf")], overflow="clip") == struct.pack("<f", float("inf"))
+    restored_nan = unpack(f32, pack(f32, [float("nan")], overflow="clip"))[0]
+    assert isinstance(restored_nan, float) and math.isnan(restored_nan)
+    # Explicit widths follow the same unsigned clip.
+    assert pack_unsigned_bits((8,), [300], overflow="clip") == b"\xff"
+    assert pack_unsigned_bits((8,), [-1], overflow="clip") == b"\x00"
+
+
+def test_legacy_wrap_keeps_the_low_bits() -> None:
+    # Delphi SaveValue, {$R+} off. Default pack keeps the low bits.
+    # 300 as u8 is 0x2C. -200 as i8 is 0x38.
     assert pack((Field("b", 2),), [300]) == bytes.fromhex("2c")
-    assert unpack((Field("b", 2),), bytes.fromhex("2c")) == (0x2C,)
-    # 0x1000 keeps the low 12 bits, which are zero.
+    assert pack((Field("b", 2),), [300], overflow="wrap") == bytes.fromhex("2c")
     assert pack((Field("sample", 3),), [0x1000]) == bytes.fromhex("0000")
-    # -200 as i8 keeps 0x38. The sign bit is clear, so unpack is +56.
     assert pack((Field("b", 6),), [-200]) == bytes.fromhex("38")
     assert unpack((Field("b", 6),), bytes.fromhex("38")) == (56,)
-    # A bool field is one bit. 3 keeps the low bit.
-    assert pack((Field("flag", 1),), [3]) == b"\x01"
     assert pack((Field("flag", 1),), [2]) == b"\x00"
+    assert pack((Field("flag", 1),), [3]) == b"\x01"
+    assert pack_unsigned_bits((8,), [300]) == bytes.fromhex("2c")
+    assert pack_unsigned_bits((8,), [-1]) == b"\xff"
+
+
+def test_checksum_keeps_the_low_bits() -> None:
+    # A 16-bit accumulator drops the carry. 0x10000 becomes 0; 0x100FF becomes 0xFF.
+    assert truncate_checksum(0x10000, 16) == 0
+    assert truncate_checksum(0x100FF, 16) == 0x00FF
+    assert truncate_checksum(0x1FF, 8) == 0xFF
+    assert truncate_checksum(-1, 16) == 0xFFFF
+    total = sum(range(1000))
+    assert truncate_checksum(total, 16) == total & 0xFFFF
+    assert total > 0xFFFF
 
 
 def test_null_packs_as_zero() -> None:
