@@ -141,6 +141,12 @@ def test_sign_out_clears_editor_ids() -> None:
         assert snippet in sign_out
     assert "state.fieldId = null" in _function_body(script.text, "clearFieldForm")
     assert "state.connectionId = null" in _function_body(script.text, "clearPinForm")
+    delete_node = _function_body(script.text, "deleteNode")
+    assert "clearPinForm()" in delete_node
+    assert "loadHardware()" in delete_node
+    hardware = _function_body(script.text, "loadHardware")
+    assert "row.id" in hardware
+    assert 'className = "no-print"' in hardware
     assert "state.deviceId = null" in _function_body(script.text, "clearDeviceForm")
     assert "state.serverId = null" in _function_body(script.text, "clearServerForm")
 

@@ -219,6 +219,7 @@ function addHeader(row, label) {
   const cell = document.createElement("th");
   cell.textContent = label;
   row.appendChild(cell);
+  return cell;
 }
 
 function setSelectValue(select, value) {
@@ -526,15 +527,26 @@ async function loadHardware() {
   }
   const table = document.createElement("table");
   const head = document.createElement("tr");
-  for (const label of ["Area", "Board", "First pin", "Link type", "Short name", "Part #", "Description"]) {
+  for (const label of [
+    "Connection",
+    "Area",
+    "Board",
+    "First pin",
+    "Link type",
+    "Short name",
+    "Part #",
+    "Description",
+  ]) {
     addHeader(head, label);
   }
   if (node.icon_id === 10) {
-    addHeader(head, "");
+    const actionHead = addHeader(head, "");
+    actionHead.className = "no-print";
   }
   table.appendChild(head);
   for (const row of rows) {
     const line = document.createElement("tr");
+    addCell(line, row.id);
     addCell(line, row.area);
     addCell(line, row.board);
     addCell(line, row.first_pin);
@@ -544,6 +556,7 @@ async function loadHardware() {
     addCell(line, row.description);
     if (node.icon_id === 10) {
       const action = document.createElement("td");
+      action.className = "no-print";
       const edit = document.createElement("button");
       edit.type = "button";
       edit.textContent = "Edit";
@@ -1169,8 +1182,10 @@ async function deleteNode() {
   await reloadTree();
   clearPacketForm();
   clearFieldForm();
+  clearPinForm();
   await loadFields();
   await loadMappings();
+  await loadHardware();
   setStatus("Deleted " + node.name, false);
 }
 
