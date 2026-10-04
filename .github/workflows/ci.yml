@@ -1,8 +1,9 @@
 # One workflow, two Ubuntu 24.04 runners (x86_64 and ARM64), plus Mojo.
 # Both architecture jobs load database/schema and run the same pytest suite.
-# The Mojo job installs Mojo 1.1.0 and builds the placeholder. If that pin
-# cannot be installed or will not start, the build step is skipped and the
-# job stays green. A build failure after a successful install fails CI.
+# The Mojo job runs inside Modular's published MAX container, which already
+# contains the Mojo 1.1.0 compiler. CI does not pip-install or build Mojo.
+# modular/max-nvidia-base:26.6.0 publishes linux/amd64 and linux/arm64, so
+# both runners execute the same build and smoke tests.
 
 name: CI
 
@@ -66,7 +67,7 @@ jobs:
         run: pytest
 
   mojo:
-    name: mojo placeholder (${{ matrix.runner }})
+    name: mojo (${{ matrix.runner }})
     runs-on: ${{ matrix.runner }}
     timeout-minutes: 30
     strategy:
@@ -75,39 +76,16 @@ jobs:
         runner: [ubuntu-24.04, ubuntu-24.04-arm]
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.12"
-      - name: Install Mojo SDK when this architecture provides it
-        id: sdk
+      - name: Version, build, and test inside the MAX container
         run: |
-          set +e
-          python -m pip install --upgrade pip
-          python -m pip install 'mojo==1.1.0'
-          install_status=$?
-          set -e
-          if [ "$install_status" -ne 0 ]; then
-            echo "available=false" >> "$GITHUB_OUTPUT"
-            echo "::notice title=Mojo SDK unavailable::pip could not install mojo==1.1.0 on ${{ matrix.runner }}. The build step is skipped."
-            exit 0
-          fi
-          if ! command -v mojo >/dev/null 2>&1; then
-            echo "::error::pip installed mojo but the mojo executable is not on PATH."
-            exit 1
-          fi
-          set +e
+          set -euo pipefail
+          image="modular/max-nvidia-base:26.6.0@sha256:53a1f0b502e67f400b0bc3c4575fde73f84d468ea03b977eaad2ef6fcd303c31"
+          docker run --rm --entrypoint bash \
+            -v "$PWD":/work -w /work \
+            "$image" \
+            -lc 'set -euo pipefail
           mojo --version
-          version_status=$?
-          set -e
-          if [ "$version_status" -ne 0 ]; then
-            echo "available=false" >> "$GITHUB_OUTPUT"
-            echo "::notice title=Mojo SDK unavailable::mojo==1.1.0 does not run on ${{ matrix.runner }}. The build step is skipped."
-            exit 0
-          fi
-          echo "available=true" >> "$GITHUB_OUTPUT"
-      - name: Build and run the placeholder
-        if: steps.sdk.outputs.available == 'true'
-        run: |
           mkdir -p mojo/build
-          mojo build mojo/placeholder.mojo -o mojo/build/placeholder
-          ./mojo/build/placeholder
+          mojo build mojo/bitpack.mojo -o mojo/build/bitpack
+          ./mojo/build/bitpack
+          mojo run -I mojo mojo/test_bitpack.mojo'

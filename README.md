@@ -43,7 +43,7 @@ database/schema/           01_schema.sql then 03_programmability.sql
 deploy/systemd/            bridge, tmoip, exporter, web
 fixtures/oracle/           Win64 harness output (empty until phase 0)
 fixtures/live/             later captures from the Linux host
-mojo/                      optional placeholder; Python does not import it
+mojo/                      Mojo smoke packer; Python does not import it
 src/astra/
   codec/                   pure-Python bit packer and TransformOutput
   binlog/                  LOG-T*-I*.DAT layout (phase 1)
@@ -97,7 +97,7 @@ CPython 3.12, Ubuntu 24.04's default `python3` on amd64 and arm64.
 | Tests | pytest, Hypothesis, pytest-asyncio |
 | Oracle JSON | jsonschema and types-jsonschema, dev-only |
 | Lint and types | Ruff, mypy strict |
-| Mojo | optional pin `mojo==1.1.0`, not imported by the service |
+| Mojo | container `modular/max-nvidia-base:26.6.0` (Mojo 1.1.0); not imported by the service |
 
 Not installed, on purpose: PySide6 (optional desktop fallback), openpyxl
 (only if an XLSX consumer is named), and the Chapter 10 C tree (not on the
@@ -129,13 +129,15 @@ pytest
 
 `02_data.sql` is not loaded. See `database/README.md`.
 
-Mojo is optional. See `mojo/README.md`.
+Mojo is optional and free to use. The compiler comes from Modular's
+published container, which has both amd64 and arm64. See `mojo/README.md`.
+The image entrypoint is `max serve`, so the command below replaces it.
 
 ```bash
-python -m pip install 'mojo==1.1.0'
-mkdir -p mojo/build
-mojo build mojo/placeholder.mojo -o mojo/build/placeholder
-./mojo/build/placeholder
+docker run --rm --entrypoint bash \
+  -v "$PWD":/work -w /work \
+  modular/max-nvidia-base:26.6.0@sha256:53a1f0b502e67f400b0bc3c4575fde73f84d468ea03b977eaad2ef6fcd303c31 \
+  -lc 'mojo --version && mkdir -p mojo/build && mojo build mojo/bitpack.mojo -o mojo/build/bitpack && ./mojo/build/bitpack && mojo run -I mojo mojo/test_bitpack.mojo'
 ```
 
 ## Tests
@@ -161,9 +163,12 @@ Oracle fixtures are described in `fixtures/README.md`.
 
 - **python** on `ubuntu-24.04` and `ubuntu-24.04-arm`: PostgreSQL 16, schema
   load, Ruff, mypy, pytest
-- **mojo** on both runners: install Mojo 1.1.0 and build
-  `mojo/placeholder.mojo`. If that pin cannot be installed or will not start,
-  the build step is skipped and the job stays green
+- **mojo** on both runners: `docker run` Modular's
+  `modular/max-nvidia-base:26.6.0` image (manifest list
+  `sha256:53a1f0b502e67f400b0bc3c4575fde73f84d468ea03b977eaad2ef6fcd303c31`,
+  Mojo 1.1.0, linux/amd64 and linux/arm64). The job runs `mojo --version`,
+  builds `mojo/bitpack.mojo`, and runs `mojo/test_bitpack.mojo`. A container
+  or compile failure fails CI. CI does not install Mojo with pip
 
 ## Still open
 
