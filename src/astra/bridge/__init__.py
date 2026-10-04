@@ -3,8 +3,10 @@
 One process replaces ``AstraBridgeServer`` and ``AstraBridgeServerDesktop``.
 It will poll ``config.tests``, bind ``ASTRA_BRIDGE_PORT`` (default 2357),
 write ``.DAT`` files, and publish OPC UA tags through :mod:`astra.opcua`.
-The accept check below is the part ``IdUDPServerUDPRead`` specifies. The
-socket loop is not running yet.
+The accept check below is the part ``IdUDPServerUDPRead`` specifies.
+:class:`astra.bridge.capture.LocalRecorder` binds localhost, applies that
+check, and writes a ``.DAT``. The service process still does not poll tests
+or publish OPC UA.
 """
 
 from collections.abc import Mapping

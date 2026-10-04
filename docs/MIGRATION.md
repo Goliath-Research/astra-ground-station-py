@@ -422,11 +422,13 @@ Deliberate deviations:
 
 ### Phase 7 — device simulator and live capture
 
-The simulator from phase 3 stays as the bench tool. After the first real test on the Ubuntu host, archive the pcap and the DAT files (the live-capture step at the start of this section) and add them to the replay tests on both architectures.
+Done for everything that does not need a vehicle. `python -m astra.cli.device` sends synthetic R2L datagrams (packet id, then a payload whose first four bytes are `t_ms`, stepping by `round(1000 / rate)` milliseconds). `LocalRecorder` binds `127.0.0.1`, applies the bridge accept rules, and writes `LOG-T{test}-I{packet}.DAT` (version 1, OLE local timestamp, payload). `replay_payloads` reads that file back and requires `t_ms` to keep increasing. A wrong size, unknown packet id, wrong peer, or non-increasing `t_ms` is not in the file.
 
-### Phase 8 — decide on the EntityDAC hardware editor
+`fixtures/live/` stays empty. There is no real vehicle pcap and no flight `.DAT` to archive. When the first test on the Ubuntu host happens, add the `tcpdump` and the `.DAT` files there and replay them on both architectures. Do not invent that capture.
 
-Only after phases 1–6. The scripts in `database/` are the Configurator schema. They do not contain the EntityDAC v3 tables. If those tables were never what a vehicle was built from (question 2), do not port `AstraConfigurationManager`.
+### Phase 8 — Configurator hardware editor
+
+The scripts in `database/` are the Configurator schema. They do not contain the EntityDAC v3 tables, and those tables stay out (question 2). The editor to port is the Configurator hardware tree: icon 8 under a smart node, icon 9 areas, icon 10 boards, connectors and pins, and a printable wiring list. Do not port `AstraConfigurationManager`.
 
 The Chapter 10 C library stays unbuilt unless a real Chapter 10 file appears later. If it does, the test is `cffi` decode versus the upstream `irig106` tools on that file, on both architectures, not a rewrite.
 
@@ -455,7 +457,7 @@ Risks that are visible from this tree:
 Open questions for David:
 
 1. **Resolved.** Both `AstraConfig` and `AstraTestLog` were in the backups. Schema and programmability scripts are in `database/`. The `02_data.sql` scripts and the `.bak` files stay outside git.
-2. Is the EntityDAC model in `DataModel.Mapping.xml` (boards / stacks / stars / proc blocks) what any vehicle was built from, or was the live tool always `AstraConfigurator` plus `TreeVersions`?
+2. **Default, pending override.** The EntityDAC v3 tables (`DataModel.Mapping.xml`, boards / stacks / stars / proc blocks) stay out of this port. Hardware editing uses the Configurator tree: `TreeVersions` icons 8–10, areas, boards, and connectors. David can override if a vehicle was actually built from the EntityDAC model.
 3. **Resolved.** LabVIEW will move from NI shared variables to OPC UA tags published by the bridge.
 4. **Resolved.** The bridge port is configuration (`ASTRA_BRIDGE_PORT`, environment variable or `/etc/astra/astra.env`). The legacy literal 2357 is the default, and it is the stored `servers.port`. The OPC DA ProgID on that row is `National Instruments.Variable Engine.1`, kept as a legacy reference; the published endpoint is `ASTRA_OPCUA_ENDPOINT`. See `docs/CODEC_DB_ANSWERS.md`.
 5. **Resolved.** The rocket started with two stages. Stage count is `ASTRA_STAGE_COUNT`, default 2, not the two constructors in `TAstraDecoder.Create`.
