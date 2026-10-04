@@ -472,7 +472,7 @@ async function loadTests() {
   host.replaceChildren();
   const table = document.createElement("table");
   const head = document.createElement("tr");
-  for (const label of ["Name", "Server", "Active"]) {
+  for (const label of ["Name", "Server", "Active", ""]) {
     addHeader(head, label);
   }
   table.appendChild(head);
@@ -484,12 +484,42 @@ async function loadTests() {
     line.addEventListener("click", () => {
       selectTest(row.id).catch((error) => setStatus(error.message, true));
     });
+    const action = document.createElement("td");
+    action.appendChild(testAction(row.id, "start", "Start"));
+    action.appendChild(testAction(row.id, "stop", "Stop"));
+    line.appendChild(action);
     table.appendChild(line);
   }
   host.appendChild(table);
   if (state.testId !== null) {
     await loadJobs();
   }
+}
+
+function testAction(testId, action, label) {
+  const button = document.createElement("button");
+  button.type = "button";
+  button.textContent = label;
+  button.addEventListener("click", (event) => {
+    event.stopPropagation();
+    runTest(testId, action).catch((error) => setStatus(error.message, true));
+  });
+  return button;
+}
+
+async function runTest(testId, action) {
+  const saved = await api("/api/tests/" + testId + "/" + action, { method: "POST" });
+  state.testId = saved.id;
+  await loadTests();
+  if (action === "start") {
+    setStatus("Started " + saved.name, false);
+    return;
+  }
+  if (action === "stop") {
+    setStatus("Stopped " + saved.name, false);
+    return;
+  }
+  throw new Error("unknown test action");
 }
 
 async function addTest() {

@@ -68,6 +68,8 @@ def test_operator_page_lists_the_configurator_screens() -> None:
     assert style.status_code == 200
     assert "console.log" not in script.text
     assert "password_set" in script.text
+    assert 'testAction(row.id, "start", "Start")' in script.text
+    assert 'testAction(row.id, "stop", "Stop")' in script.text
 
 
 def test_api_is_closed_without_a_token(monkeypatch: pytest.MonkeyPatch) -> None:
