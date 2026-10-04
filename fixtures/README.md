@@ -25,4 +25,7 @@ Fractional `values` are decimal strings, not JSON floats. Multi-byte payload
 integers are little-endian. Do not put secrets or production rows in a fixture.
 
 `fixtures/live/` is for pcaps and `.DAT` files captured on the Linux host
-after the first real test. It is empty on purpose.
+after the first real vehicle test. It is empty on purpose. The bench path
+is `python -m astra.cli.device` into `LocalRecorder`, which writes a `.DAT`
+under a temporary directory and replays it in `tests/test_bridge_capture.py`.
+Do not check in a synthetic capture as if it were that vehicle test.
